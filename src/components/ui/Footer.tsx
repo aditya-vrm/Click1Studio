@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Globe, ArrowUp, Mail } from "lucide-react";
 
 const InstagramIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -51,10 +52,26 @@ export default function Footer() {
         <div className="lg:col-span-2 lg:col-start-7 space-y-6">
           <h5 className="font-body text-[10px] text-tertiary uppercase tracking-[0.4em] font-semibold">Explore</h5>
           <ul className="space-y-4 font-body text-on-surface-variant text-sm">
-            <li><a href="#portfolio" className="hover:text-primary transition-colors flex items-center gap-2 group">Portfolio <span className="w-0 group-hover:w-3 h-[1px] bg-tertiary transition-all"></span></a></li>
-            <li><a href="#experience" className="hover:text-primary transition-colors flex items-center gap-2 group">The Process <span className="w-0 group-hover:w-3 h-[1px] bg-tertiary transition-all"></span></a></li>
-            <li><a href="#collections" className="hover:text-primary transition-colors flex items-center gap-2 group">Collections <span className="w-0 group-hover:w-3 h-[1px] bg-tertiary transition-all"></span></a></li>
-            <li><a href="#inquire" className="hover:text-primary transition-colors flex items-center gap-2 group">Inquire <span className="w-0 group-hover:w-3 h-[1px] bg-tertiary transition-all"></span></a></li>
+            <li>
+              <Link href="/portfolio" className="hover:text-primary transition-colors flex items-center gap-2 group">
+                Portfolio <span className="w-0 group-hover:w-3 h-[1px] bg-tertiary transition-all"></span>
+              </Link>
+            </li>
+            <li>
+              <Link href="/films" className="hover:text-primary transition-colors flex items-center gap-2 group">
+                Films & Collections <span className="w-0 group-hover:w-3 h-[1px] bg-tertiary transition-all"></span>
+              </Link>
+            </li>
+            <li>
+              <Link href="/book" className="hover:text-primary transition-colors flex items-center gap-2 group">
+                Inquire <span className="w-0 group-hover:w-3 h-[1px] bg-tertiary transition-all"></span>
+              </Link>
+            </li>
+            <li>
+              <Link href="/" className="hover:text-primary transition-colors flex items-center gap-2 group">
+                Home <span className="w-0 group-hover:w-3 h-[1px] bg-tertiary transition-all"></span>
+              </Link>
+            </li>
           </ul>
         </div>
 

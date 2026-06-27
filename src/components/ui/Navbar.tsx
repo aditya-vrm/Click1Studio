@@ -1,12 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Search, Menu, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const pathname = usePathname();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -21,29 +24,11 @@ export default function Navbar() {
   }, []);
 
   const navLinks = [
-    { name: "Portfolio", href: "#portfolio" },
-    { name: "The Experience", href: "#experience" },
-    { name: "Collections", href: "#collections" },
-    { name: "Inquire", href: "#inquire" },
+    { name: "Home", href: "/" },
+    { name: "Portfolio", href: "/portfolio" },
+    { name: "Films", href: "/films" },
+    { name: "Book Now", href: "/book" },
   ];
-
-  const handleLinkClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
-    e.preventDefault();
-    setMobileMenuOpen(false);
-    const element = document.querySelector(href);
-    if (element) {
-      const offset = 80;
-      const bodyRect = document.body.getBoundingClientRect().top;
-      const elementRect = element.getBoundingClientRect().top;
-      const elementPosition = elementRect - bodyRect;
-      const offsetPosition = elementPosition - offset;
-
-      window.scrollTo({
-        top: offsetPosition,
-        behavior: "smooth"
-      });
-    }
-  };
 
   return (
     <>
@@ -58,26 +43,32 @@ export default function Navbar() {
         }`}
       >
         {/* Logo */}
-        <div 
-          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+        <Link 
+          href="/"
           className="font-display text-xl md:text-2xl text-primary tracking-tighter uppercase font-bold cursor-pointer select-none"
         >
           Click1<span className="text-tertiary italic font-light">Studio</span>
-        </div>
+        </Link>
 
         {/* Desktop Navigation */}
         <nav className="hidden lg:flex gap-12 items-center">
-          {navLinks.map((link) => (
-            <a
-              key={link.name}
-              href={link.href}
-              onClick={(e) => handleLinkClick(e, link.href)}
-              className="text-on-surface-variant hover:text-primary transition-colors font-body text-xs font-semibold tracking-[0.2em] uppercase relative group py-2"
-            >
-              {link.name}
-              <span className="absolute bottom-0 left-0 w-full h-[1px] bg-tertiary transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300"></span>
-            </a>
-          ))}
+          {navLinks.map((link) => {
+            const isActive = pathname === link.href;
+            return (
+              <Link
+                key={link.name}
+                href={link.href}
+                className={`transition-colors font-body text-xs font-semibold tracking-[0.2em] uppercase relative group py-2 ${
+                  isActive ? "text-tertiary" : "text-on-surface-variant hover:text-primary"
+                }`}
+              >
+                {link.name}
+                <span className={`absolute bottom-0 left-0 w-full h-[1px] bg-tertiary transform transition-transform origin-left duration-300 ${
+                  isActive ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100"
+                }`}></span>
+              </Link>
+            );
+          })}
         </nav>
 
         {/* Actions */}
@@ -85,13 +76,12 @@ export default function Navbar() {
           <button className="text-primary hover:text-tertiary transition-colors cursor-pointer">
             <Search className="w-5 h-5 stroke-[1.5]" />
           </button>
-          <a
-            href="#inquire"
-            onClick={(e) => handleLinkClick(e, "#inquire")}
+          <Link
+            href="/book"
             className="bg-primary/5 hover:bg-tertiary text-primary hover:text-on-background font-body text-[10px] font-semibold tracking-widest border border-primary/20 hover:border-tertiary px-8 py-3 rounded-full backdrop-blur-md transition-all duration-500 uppercase cursor-pointer"
           >
             INQUIRE NOW
-          </a>
+          </Link>
         </div>
 
         {/* Mobile menu trigger */}
@@ -117,17 +107,20 @@ export default function Navbar() {
           >
             <div className="flex flex-col gap-8 text-left max-w-md mx-auto w-full">
               {navLinks.map((link, idx) => (
-                <motion.a
+                <motion.div
                   initial={{ x: -30, opacity: 0 }}
                   animate={{ x: 0, opacity: 1 }}
                   transition={{ delay: idx * 0.1, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
                   key={link.name}
-                  href={link.href}
-                  onClick={(e) => handleLinkClick(e, link.href)}
-                  className="font-display text-4xl text-on-background hover:text-tertiary transition-colors uppercase tracking-tight"
                 >
-                  {link.name}
-                </motion.a>
+                  <Link
+                    href={link.href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="font-display text-4xl text-on-background hover:text-tertiary transition-colors uppercase tracking-tight"
+                  >
+                    {link.name}
+                  </Link>
+                </motion.div>
               ))}
 
               <motion.div
@@ -136,13 +129,13 @@ export default function Navbar() {
                 transition={{ delay: 0.5, duration: 0.6 }}
                 className="pt-8 border-t border-white/10 mt-4 flex flex-col gap-6"
               >
-                <a
-                  href="#inquire"
-                  onClick={(e) => handleLinkClick(e, "#inquire")}
+                <Link
+                  href="/book"
+                  onClick={() => setMobileMenuOpen(false)}
                   className="bg-tertiary text-on-background font-body text-center text-xs tracking-widest py-5 rounded-full uppercase font-bold"
                 >
                   RESERVE YOUR DATE
-                </a>
+                </Link>
               </motion.div>
             </div>
           </motion.div>
