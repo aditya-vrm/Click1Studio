@@ -1,45 +1,41 @@
 "use client";
 
-import { useRef } from "react";
-import { Play, ArrowRight, MapPin, ChevronLeft, ChevronRight, Video } from "lucide-react";
+import { useRef, useState, useEffect } from "react";
+import { Play, ArrowRight, MapPin, ChevronLeft, ChevronRight, Video, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import Navbar from "@/components/ui/Navbar";
 import Footer from "@/components/ui/Footer";
 
 interface FilmItem {
-  id: number;
+  id: string;
   title: string;
   location: string;
   duration: string;
   coverImage: string;
+  videoUrl?: string;
 }
 
 export default function FilmsPage() {
   const sliderRef = useRef<HTMLDivElement>(null);
+  const [weddingFilms, setWeddingFilms] = useState<FilmItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const weddingFilms: FilmItem[] = [
-    {
-      id: 1,
-      title: "Aurelia & Julian",
-      location: "Lake Como, Italy",
-      duration: "04:22",
-      coverImage: "https://images.unsplash.com/photo-1519741497674-611481863552?q=80&w=1000&auto=format&fit=crop"
-    },
-    {
-      id: 2,
-      title: "Evelyn & Thomas",
-      location: "Paris, France",
-      duration: "05:15",
-      coverImage: "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?q=80&w=1000&auto=format&fit=crop"
-    },
-    {
-      id: 3,
-      title: "Sophia & Marcus",
-      location: "Dubai, UAE",
-      duration: "03:45",
-      coverImage: "https://images.unsplash.com/photo-1533105079780-92b9be482077?q=80&w=1000&auto=format&fit=crop"
-    }
-  ];
+  useEffect(() => {
+    const fetchFilms = async () => {
+      try {
+        const res = await fetch("/api/films");
+        if (res.ok) {
+          const data = await res.json();
+          setWeddingFilms(data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch films:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchFilms();
+  }, []);
 
   const scrollSlider = (direction: "left" | "right") => {
     if (sliderRef.current) {
@@ -120,55 +116,76 @@ export default function FilmsPage() {
 
           {/* Netlix Style Slider block */}
           <div className="relative group/slider max-w-[1440px] mx-auto">
-            <div 
-              ref={sliderRef}
-              className="flex gap-8 overflow-x-auto no-scrollbar px-6 md:px-20 pb-8 slider-container"
-            >
-              {weddingFilms.map((film) => (
-                <div key={film.id} className="film-card flex-shrink-0 w-[300px] md:w-[480px] relative cursor-pointer group">
-                  <div className="aspect-[16/9] overflow-hidden rounded-2xl relative shadow-2xl">
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-24">
+                <Loader2 className="w-8 h-8 text-tertiary animate-spin mb-4" />
+                <p className="font-body text-xs text-on-surface-variant uppercase tracking-[0.2em] font-light">Loading Collections...</p>
+              </div>
+            ) : weddingFilms.length === 0 ? (
+              <div className="text-center py-24 border border-dashed border-white/5 rounded-2xl mx-6 md:mx-20">
+                <p className="font-body text-sm text-on-surface-variant italic">No films in the collection yet.</p>
+              </div>
+            ) : (
+              <>
+                <div 
+                  ref={sliderRef}
+                  className="flex gap-8 overflow-x-auto no-scrollbar px-6 md:px-20 pb-8 slider-container"
+                >
+                  {weddingFilms.map((film) => (
                     <div 
-                      className="w-full h-full bg-cover bg-center transition-transform duration-700 group-hover:scale-105" 
-                      style={{ backgroundImage: `url(${film.coverImage})` }} 
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent opacity-80" />
-                    
-                    {/* Hover Play Button */}
-                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-500 backdrop-blur-[1px]">
-                      <div className="w-16 h-16 rounded-full border border-tertiary/40 flex items-center justify-center text-tertiary bg-[#0b0b0b]/60 scale-75 group-hover:scale-100 transition-transform duration-500">
-                        <Play className="w-6 h-6 fill-current ml-1" />
+                      key={film.id} 
+                      onClick={() => {
+                        if (film.videoUrl) {
+                          window.open(film.videoUrl, "_blank");
+                        }
+                      }}
+                      className="film-card flex-shrink-0 w-[300px] md:w-[480px] relative cursor-pointer group"
+                    >
+                      <div className="aspect-[16/9] overflow-hidden rounded-2xl relative shadow-2xl">
+                        <div 
+                          className="w-full h-full bg-cover bg-center transition-transform duration-700 group-hover:scale-105" 
+                          style={{ backgroundImage: `url(${film.coverImage})` }} 
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent opacity-80" />
+                        
+                        {/* Hover Play Button */}
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-500 backdrop-blur-[1px]">
+                          <div className="w-16 h-16 rounded-full border border-tertiary/40 flex items-center justify-center text-tertiary bg-[#0b0b0b]/60 scale-75 group-hover:scale-100 transition-transform duration-500">
+                            <Play className="w-6 h-6 fill-current ml-1" />
+                          </div>
+                        </div>
+                        
+                        <span className="absolute top-4 right-4 bg-[#0b0b0b]/80 backdrop-blur-md px-3 py-1 rounded-full text-[9px] font-body text-white font-bold tracking-widest">
+                          {film.duration}
+                        </span>
+                      </div>
+                      <div className="mt-6">
+                        <h4 className="font-display text-xl text-white group-hover:text-tertiary transition-colors font-bold uppercase tracking-tight">
+                          {film.title}
+                        </h4>
+                        <p className="text-on-surface-variant font-body text-xs mt-2 flex items-center gap-1 font-light">
+                          <MapPin className="w-3.5 h-3.5 text-tertiary" /> {film.location}
+                        </p>
                       </div>
                     </div>
-                    
-                    <span className="absolute top-4 right-4 bg-[#0b0b0b]/80 backdrop-blur-md px-3 py-1 rounded-full text-[9px] font-body text-white font-bold tracking-widest">
-                      {film.duration}
-                    </span>
-                  </div>
-                  <div className="mt-6">
-                    <h4 className="font-display text-xl text-white group-hover:text-tertiary transition-colors font-bold uppercase tracking-tight">
-                      {film.title}
-                    </h4>
-                    <p className="text-on-surface-variant font-body text-xs mt-2 flex items-center gap-1 font-light">
-                      <MapPin className="w-3.5 h-3.5 text-tertiary" /> {film.location}
-                    </p>
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
 
-            {/* Slider triggers */}
-            <button 
-              onClick={() => scrollSlider("left")}
-              className="absolute left-6 top-[35%] -translate-y-1/2 z-30 bg-black/80 border border-white/5 text-white p-3 rounded-full opacity-0 group-hover/slider:opacity-100 transition-opacity hover:bg-tertiary hover:text-black cursor-pointer"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-            <button 
-              onClick={() => scrollSlider("right")}
-              className="absolute right-6 top-[35%] -translate-y-1/2 z-30 bg-black/80 border border-white/5 text-white p-3 rounded-full opacity-0 group-hover/slider:opacity-100 transition-opacity hover:bg-tertiary hover:text-black cursor-pointer"
-            >
-              <ChevronRight className="w-5 h-5" />
-            </button>
+                {/* Slider triggers */}
+                <button 
+                  onClick={() => scrollSlider("left")}
+                  className="absolute left-6 top-[35%] -translate-y-1/2 z-30 bg-black/80 border border-white/5 text-white p-3 rounded-full opacity-0 group-hover/slider:opacity-100 transition-opacity hover:bg-tertiary hover:text-black cursor-pointer"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <button 
+                  onClick={() => scrollSlider("right")}
+                  className="absolute right-6 top-[35%] -translate-y-1/2 z-30 bg-black/80 border border-white/5 text-white p-3 rounded-full opacity-0 group-hover/slider:opacity-100 transition-opacity hover:bg-tertiary hover:text-black cursor-pointer"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </>
+            )}
           </div>
         </section>
 

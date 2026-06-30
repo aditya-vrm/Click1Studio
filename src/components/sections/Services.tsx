@@ -68,24 +68,9 @@ export default function Services() {
             transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
             className="max-w-2xl"
           >
-            <span className="font-body text-tertiary text-xs font-bold tracking-[0.5em] uppercase mb-4 block">
+            <span className="font-body text-tertiary text-xl font-bold tracking-[0.5em] uppercase  block">
               Our Services
             </span>
-            <h2 className="font-display text-4xl md:text-5xl text-on-surface leading-tight font-semibold uppercase">
-              Curated Visual Narratives <br />
-              For Extraordinary Lives
-            </h2>
-          </motion.div>
-          <motion.div 
-            initial={{ opacity: 0, x: 30 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true, margin: "-100px" }}
-            transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
-            className="lg:max-w-md border-l border-tertiary/20 pl-8 py-2"
-          >
-            <p className="font-body text-on-surface-variant text-base leading-relaxed font-light">
-              From intimate elopements on the Amalfi Coast to grand celebrations in Parisian châteaus, Click1Studio provides a full suite of luxury capture services.
-            </p>
           </motion.div>
         </div>
 

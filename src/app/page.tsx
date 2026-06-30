@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import Navbar from "@/components/ui/Navbar";
 import Hero from "@/components/sections/Hero";
 import Services from "@/components/sections/Services";
+import FAQ from "@/components/sections/FAQ";
 import Footer from "@/components/ui/Footer";
 
 // Dynamically import ThreeLoader to prevent SSR hydration errors with Canvas
@@ -120,6 +121,9 @@ export default function Home() {
                 </div>
               </section>
             </main>
+
+            {/* FAQ Section */}
+            <FAQ />
 
             {/* Footer */}
             <Footer />

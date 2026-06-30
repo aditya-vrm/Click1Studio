@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import Link from "next/link";
 import { Play } from "lucide-react";
 import { motion, useScroll, useTransform } from "framer-motion";
 
@@ -15,40 +16,6 @@ export default function Hero() {
   const textY = useTransform(scrollYProgress, [0, 1], ["0%", "50%"]);
   const bgY = useTransform(scrollYProgress, [0, 1], ["0%", "20%"]);
   const opacity = useTransform(scrollYProgress, [0, 1], [1, 0]);
-
-  const handleScrollToInquire = (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.preventDefault();
-    const element = document.querySelector("#inquire");
-    if (element) {
-      const offset = 80;
-      const bodyRect = document.body.getBoundingClientRect().top;
-      const elementRect = element.getBoundingClientRect().top;
-      const elementPosition = elementRect - bodyRect;
-      const offsetPosition = elementPosition - offset;
-
-      window.scrollTo({
-        top: offsetPosition,
-        behavior: "smooth"
-      });
-    }
-  };
-
-  const handleScrollToPortfolio = (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.preventDefault();
-    const element = document.querySelector("#portfolio");
-    if (element) {
-      const offset = 80;
-      const bodyRect = document.body.getBoundingClientRect().top;
-      const elementRect = element.getBoundingClientRect().top;
-      const elementPosition = elementRect - bodyRect;
-      const offsetPosition = elementPosition - offset;
-
-      window.scrollTo({
-        top: offsetPosition,
-        behavior: "smooth"
-      });
-    }
-  };
 
   return (
     <section
@@ -81,7 +48,7 @@ export default function Hero() {
           transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
         >
           <span className="font-body text-tertiary text-xs font-bold tracking-[0.5em] uppercase">
-            International Destination Photographers
+            LUXURY WEDDING PHOTOGRAPHY & FILMS
           </span>
         </motion.div>
 
@@ -101,7 +68,7 @@ export default function Hero() {
           transition={{ duration: 1.2, delay: 0.4, ease: [0.16, 1, 0.3, 1] }}
           className="font-body text-on-surface-variant max-w-2xl mx-auto text-base md:text-lg leading-relaxed font-light"
         >
-          We don't just capture images; we archive emotions. Timeless, editorial wedding photography for the most discerning couples around the globe.
+          We capture the moments you'll want to relive for a lifetime. Beautiful photos and films for weddings and every special occasion.
         </motion.p>
 
         <motion.div
@@ -110,19 +77,19 @@ export default function Hero() {
           transition={{ duration: 1.2, delay: 0.6, ease: [0.16, 1, 0.3, 1] }}
           className="flex flex-col sm:flex-row items-center justify-center gap-6 pt-6"
         >
-          <button
-            onClick={handleScrollToInquire}
-            className="w-full sm:w-auto bg-tertiary text-[#0b0b0b] font-body text-xs font-bold py-5 px-12 rounded-full gold-glow hover:scale-105 hover:brightness-110 active:scale-95 transition-all duration-300 tracking-[0.2em] uppercase cursor-pointer"
+          <Link
+            href="/book"
+            className="w-full sm:w-auto bg-tertiary text-[#0b0b0b] font-body text-xs font-bold py-5 px-12 rounded-full gold-glow hover:scale-105 hover:brightness-110 active:scale-95 transition-all duration-300 tracking-[0.2em] uppercase text-center cursor-pointer"
           >
             BOOK YOUR SHOOT
-          </button>
-          <button
-            onClick={handleScrollToPortfolio}
+          </Link>
+          <Link
+            href="/films"
             className="w-full sm:w-auto group border border-white/20 hover:border-tertiary/50 text-on-surface font-body text-xs font-semibold py-5 px-10 rounded-full backdrop-blur-md hover:scale-105 active:scale-95 transition-all duration-300 tracking-[0.2em] uppercase flex items-center justify-center gap-3 cursor-pointer"
           >
             <Play className="w-4 h-4 text-tertiary fill-tertiary group-hover:scale-110 transition-transform" />
             WATCH OUR FILMS
-          </button>
+          </Link>
         </motion.div>
       </motion.div>
 

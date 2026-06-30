@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Search, Menu, X } from "lucide-react";
+import {  Menu, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function Navbar() {
@@ -73,9 +73,7 @@ export default function Navbar() {
 
         {/* Actions */}
         <div className="hidden lg:flex items-center gap-8">
-          <button className="text-primary hover:text-tertiary transition-colors cursor-pointer">
-            <Search className="w-5 h-5 stroke-[1.5]" />
-          </button>
+    
           <Link
             href="/book"
             className="bg-primary/5 hover:bg-tertiary text-primary hover:text-on-background font-body text-[10px] font-semibold tracking-widest border border-primary/20 hover:border-tertiary px-8 py-3 rounded-full backdrop-blur-md transition-all duration-500 uppercase cursor-pointer"
