@@ -144,7 +144,7 @@ export default function FilmsPage() {
                       <div className="aspect-[16/9] overflow-hidden rounded-2xl relative shadow-2xl">
                         <div 
                           className="w-full h-full bg-cover bg-center transition-transform duration-700 group-hover:scale-105" 
-                          style={{ backgroundImage: `url(${film.coverImage})` }} 
+                          style={{ backgroundImage: `url(${film.coverImage && film.coverImage.includes("imagekit.io") ? `${film.coverImage}?tr=orig-true` : film.coverImage})` }} 
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent opacity-80" />
                         

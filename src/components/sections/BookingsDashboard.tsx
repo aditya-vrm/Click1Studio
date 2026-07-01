@@ -89,9 +89,19 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
   const [confirmMessage, setConfirmMessage] = useState("");
   const [onConfirmAction, setOnConfirmAction] = useState<(() => void) | null>(null);
 
-  // Success Modal States
-  const [successModalOpen, setSuccessModalOpen] = useState(false);
-  const [successMessage, setSuccessMessage] = useState("");
+  // Toast State
+  const [toast, setToast] = useState<{ show: boolean; message: string; type: "success" | "error" }>({
+    show: false,
+    message: "",
+    type: "success",
+  });
+
+  const showToast = (message: string, type: "success" | "error" = "success") => {
+    setToast({ show: true, message, type });
+  };
+
+  // Upload Progresses State
+  const [uploadProgresses, setUploadProgresses] = useState<{ [key: string]: number }>({});
 
   // Fetch portfolio & films
   const fetchMedia = async () => {
@@ -138,6 +148,16 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
       fetchTeam();
     }
   }, [activeTab]);
+
+  // Toast Auto-Dismiss Hook
+  useEffect(() => {
+    if (toast.show) {
+      const timer = setTimeout(() => {
+        setToast((prev) => ({ ...prev, show: false }));
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast.show]);
 
   // Logout handler
   const handleLogout = async () => {
@@ -312,12 +332,60 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
     setIsUploading(true);
     setUploadError("");
 
+    // Initialize progress indicators
+    const initialProgresses: { [key: string]: number } = {};
+    selectedFiles.forEach((file) => {
+      initialProgresses[file.name] = 0;
+    });
+    setUploadProgresses(initialProgresses);
+
+    // XHR helper to track upload completion percent (1-100)
+    const uploadFileWithProgress = (file: File, formData: FormData): Promise<any> => {
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "https://upload.imagekit.io/api/v1/files/upload");
+
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const percentComplete = Math.round((event.loaded / event.total) * 100);
+            setUploadProgresses((prev) => ({
+              ...prev,
+              [file.name]: percentComplete,
+            }));
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              resolve(JSON.parse(xhr.responseText));
+            } catch (err) {
+              reject(new Error("Failed to parse response"));
+            }
+          } else {
+            try {
+              const errData = JSON.parse(xhr.responseText);
+              reject(new Error(errData.message || `Upload failed (Status ${xhr.status})`));
+            } catch (err) {
+              reject(new Error(`Upload failed (Status ${xhr.status})`));
+            }
+          }
+        };
+
+        xhr.onerror = () => {
+          reject(new Error("Network connection error"));
+        };
+
+        xhr.send(formData);
+      });
+    };
+
     try {
       if (modalType === "portfolio") {
         // Upload multiple portfolio photos
         for (let i = 0; i < selectedFiles.length; i++) {
           const file = selectedFiles[i];
-          const progressLabel = `Uploading photo ${i + 1} of ${selectedFiles.length}...`;
+          const progressLabel = `Processing file ${i + 1} of ${selectedFiles.length}...`;
           setUploadStatus(progressLabel);
 
           // 1. Fetch signature
@@ -338,17 +406,8 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
           formData.append("token", token);
           formData.append("folder", "/portfolio");
 
-          // 3. Upload to ImageKit
-          const uploadRes = await fetch("https://upload.imagekit.io/api/v1/files/upload", {
-            method: "POST",
-            body: formData,
-          });
-
-          if (!uploadRes.ok) {
-            throw new Error(`Upload failed for photo ${i + 1}`);
-          }
-
-          const uploadData = await uploadRes.json();
+          // 3. Upload with XHR tracking
+          const uploadData = await uploadFileWithProgress(file, formData);
           const fileUrl = uploadData.url;
 
           // Extract title from file name (removing extension)
@@ -373,8 +432,7 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
           setPortfolioItems((prev) => [newPortfolioItem, ...prev]);
         }
 
-        // Show proper Success Modal!
-        setSuccessMessage(`Successfully uploaded and published ${selectedFiles.length} photographs!`);
+        showToast(`Successfully uploaded ${selectedFiles.length} photographs!`, "success");
       } else {
         // Single Film Cover upload
         const file = selectedFiles[0];
@@ -396,16 +454,7 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
         formData.append("token", token);
         formData.append("folder", "/films");
 
-        const uploadRes = await fetch("https://upload.imagekit.io/api/v1/files/upload", {
-          method: "POST",
-          body: formData,
-        });
-
-        if (!uploadRes.ok) {
-          throw new Error("Upload failed for cover image");
-        }
-
-        const uploadData = await uploadRes.json();
+        const uploadData = await uploadFileWithProgress(file, formData);
         const fileUrl = uploadData.url;
 
         setUploadStatus("Saving film details to Database...");
@@ -429,7 +478,7 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
         const newFilmItem = await dbRes.json();
         setFilmItems((prev) => [newFilmItem, ...prev]);
 
-        setSuccessMessage(`Successfully uploaded and published your new Film!`);
+        showToast("Successfully uploaded and published your new Film!", "success");
       }
 
       // Success Reset
@@ -440,7 +489,6 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
       setItemVideoUrl("");
       setSelectedFiles([]);
       setUploadStatus("");
-      setSuccessModalOpen(true);
     } catch (err: any) {
       setUploadError(err.message || "An unexpected error occurred during upload.");
     } finally {
@@ -491,9 +539,7 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
 
       const updatedItems = await res.json();
       setPortfolioItems(updatedItems);
-      
-      setSuccessMessage("Successfully set this photo as the album cover!");
-      setSuccessModalOpen(true);
+      showToast("Successfully set this photo as the album cover!", "success");
     } catch (err: any) {
       alert(err.message || "Failed to set album cover.");
     }
@@ -579,8 +625,7 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
           prev.map((m) => (m.id === memberId ? updatedMember : m))
         );
 
-        setSuccessMessage(`Successfully updated profile picture for ${memberName}!`);
-        setSuccessModalOpen(true);
+        showToast(`Successfully updated profile picture for ${memberName}!`, "success");
       } catch (err: any) {
         alert(err.message || "Failed to update team member photo.");
       } finally {
@@ -911,7 +956,7 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
                                   )}
 
                                   <img
-                                    src={item.image}
+                                    src={item.image && item.image.includes("imagekit.io") ? `${item.image}?tr=orig-true` : item.image}
                                     alt={item.title}
                                     className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-all duration-500 group-hover:scale-105"
                                   />
@@ -965,7 +1010,7 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
                         className="group relative bg-surface-container/30 border border-white/5 rounded-xl overflow-hidden aspect-video flex flex-col justify-end"
                       >
                         <img 
-                          src={item.coverImage} 
+                          src={item.coverImage && item.coverImage.includes("imagekit.io") ? `${item.coverImage}?tr=orig-true` : item.coverImage} 
                           alt={item.title} 
                           className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-75 transition-all duration-500 group-hover:scale-105"
                         />
@@ -1244,6 +1289,44 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
                   </>
                 )}
 
+                {/* Selected Files Preview Grid */}
+                {selectedFiles.length > 0 && !isUploading && (
+                  <div className="space-y-2">
+                    <label className="font-body text-[10px] uppercase text-tertiary tracking-widest font-semibold block">
+                      Staged Photos Preview ({selectedFiles.length})
+                    </label>
+                    <div className="grid grid-cols-4 sm:grid-cols-6 gap-3 bg-surface-container/20 border border-white/5 p-3 rounded-xl max-h-48 overflow-y-auto">
+                      {selectedFiles.map((file, index) => {
+                        const fileUrl = URL.createObjectURL(file);
+                        return (
+                          <div
+                            key={index}
+                            className="relative group aspect-square rounded-lg overflow-hidden border border-white/10"
+                          >
+                            <img
+                              src={fileUrl}
+                              alt=""
+                              className="w-full h-full object-cover"
+                              onLoad={() => URL.revokeObjectURL(fileUrl)}
+                            />
+                            {/* Remove button */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+                              }}
+                              className="absolute top-1 right-1 bg-black/75 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center transition-colors cursor-pointer border border-white/10"
+                              title="Remove File"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {/* File Upload Area */}
                 <div className="space-y-2">
                   <label className="font-body text-[10px] uppercase text-tertiary tracking-widest font-semibold block mb-2">
@@ -1263,17 +1346,10 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
                       required
                       disabled={isUploading}
                       multiple={modalType === "portfolio"}
-                      onChange={async (e) => {
+                      onChange={(e) => {
                         if (e.target.files && e.target.files.length > 0) {
-                          const files = e.target.files;
-                          const croppedFiles: File[] = [];
-                          for (let i = 0; i < files.length; i++) {
-                            const cropped = await startImageCrop(files[i]);
-                            if (cropped) {
-                              croppedFiles.push(cropped);
-                            }
-                          }
-                          setSelectedFiles(croppedFiles);
+                          const filesArray = Array.from(e.target.files);
+                          setSelectedFiles(filesArray);
                         }
                       }} 
                       className="hidden" 
@@ -1287,7 +1363,10 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
                   <button
                     type="button"
                     disabled={isUploading}
-                    onClick={() => setIsModalOpen(false)}
+                    onClick={() => {
+                      setIsModalOpen(false);
+                      setSelectedFiles([]);
+                    }}
                     className="flex-1 font-body text-xs uppercase tracking-widest text-on-surface-variant border border-white/10 hover:border-white/30 rounded py-3.5 transition-all duration-300 cursor-pointer disabled:opacity-50"
                   >
                     Cancel
@@ -1309,9 +1388,30 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
                 </div>
 
                 {isUploading && (
-                  <p className="text-[10px] text-center text-tertiary uppercase tracking-widest font-semibold animate-pulse mt-2">
-                    {uploadStatus}
-                  </p>
+                  <div className="space-y-3 bg-surface-container/10 border border-white/5 p-4 rounded-xl mt-4">
+                    <p className="text-[10px] text-center text-tertiary uppercase tracking-widest font-semibold animate-pulse">
+                      {uploadStatus}
+                    </p>
+                    <div className="space-y-2 max-h-36 overflow-y-auto scrollbar-none">
+                      {selectedFiles.map((file, index) => {
+                        const progress = uploadProgresses[file.name] || 0;
+                        return (
+                          <div key={index} className="space-y-1">
+                            <div className="flex justify-between items-center text-[9px] font-body text-on-surface-variant uppercase tracking-widest">
+                              <span className="truncate max-w-[70%]">{file.name}</span>
+                              <span className="font-semibold text-tertiary">{progress}%</span>
+                            </div>
+                            <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-tertiary transition-all duration-300"
+                                style={{ width: `${progress}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 )}
               </form>
             </motion.div>
@@ -1492,44 +1592,26 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
         )}
       </AnimatePresence>
 
-      {/* SUCCESS NOTIFICATION DIALOG */}
+      {/* TOAST NOTIFICATION BANNER */}
       <AnimatePresence>
-        {successModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        {toast.show && (
+          <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50">
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setSuccessModalOpen(false)}
-              className="absolute inset-0 bg-black/85 backdrop-blur-sm cursor-pointer"
-            />
-
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              className="glass-panel w-full max-w-sm p-6 rounded-xl relative z-10 border border-white/10 shadow-2xl text-center space-y-6"
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="flex items-center gap-3 bg-[#e6fcf5] border border-[#20c997]/25 text-[#099268] font-body text-xs uppercase tracking-wider px-5 py-3 rounded-xl shadow-lg"
             >
-              <div className="w-12 h-12 rounded-full bg-emerald-950/50 border border-emerald-500/30 flex items-center justify-center mx-auto text-emerald-400">
-                <svg className="w-5 h-5 stroke-[2]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              
-              <div className="space-y-2">
-                <h4 className="font-display text-lg font-bold text-white uppercase tracking-wider">
-                  Success
-                </h4>
-                <p className="font-body text-xs text-on-surface-variant leading-relaxed font-light">
-                  {successMessage}
-                </p>
-              </div>
-
+              <span className="w-5 h-5 rounded-full bg-[#20c997]/15 flex items-center justify-center text-[#20c997] font-semibold text-sm">
+                ✓
+              </span>
+              <span>{toast.message}</span>
               <button
-                onClick={() => setSuccessModalOpen(false)}
-                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-body text-xs font-bold uppercase tracking-widest rounded py-3 transition-colors cursor-pointer shadow-lg shadow-emerald-500/20"
+                type="button"
+                onClick={() => setToast((prev) => ({ ...prev, show: false }))}
+                className="ml-4 text-[#20c997] hover:text-[#099268] transition-colors p-1 hover:bg-[#20c997]/10 rounded-md cursor-pointer"
               >
-                Great
+                <X className="w-3.5 h-3.5" />
               </button>
             </motion.div>
           </div>

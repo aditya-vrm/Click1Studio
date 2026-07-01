@@ -234,7 +234,7 @@ export default function PortfolioPage() {
                     {/* Cover Photo */}
                     <img
                       alt={album.name}
-                      src={coverImage}
+                      src={coverImage.includes("imagekit.io") ? `${coverImage}?tr=orig-true` : coverImage}
                       className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-1000 group-hover:scale-105"
                     />
 
@@ -335,7 +335,7 @@ export default function PortfolioPage() {
                         className="break-inside-avoid mb-6 relative rounded-xl overflow-hidden group cursor-zoom-in bg-surface-container/20 border border-white/5 hover:border-tertiary/20 shadow-lg"
                       >
                         <img
-                          src={item.image}
+                          src={item.image.includes("imagekit.io") ? `${item.image}?tr=orig-true` : item.image}
                           alt=""
                           className="w-full h-auto object-contain transition-transform duration-700 group-hover:scale-[1.02]"
                         />
@@ -386,7 +386,11 @@ export default function PortfolioPage() {
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.98 }}
                 transition={{ duration: 0.3 }}
-                src={currentAlbumItems[lightboxImageIndex].image}
+                src={
+                  currentAlbumItems[lightboxImageIndex].image.includes("imagekit.io")
+                    ? `${currentAlbumItems[lightboxImageIndex].image}?tr=orig-true`
+                    : currentAlbumItems[lightboxImageIndex].image
+                }
                 alt=""
                 className="max-w-full max-h-[80vh] object-contain rounded shadow-2xl border border-white/5"
               />
