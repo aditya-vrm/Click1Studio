@@ -1,8 +1,8 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
-import { Play, ArrowRight, MapPin, ChevronLeft, ChevronRight, Video, Loader2 } from "lucide-react";
-import { motion } from "framer-motion";
+import { Play, ArrowRight, MapPin, ChevronLeft, ChevronRight, Video, Loader2, X } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import Navbar from "@/components/ui/Navbar";
 import Footer from "@/components/ui/Footer";
 
@@ -19,6 +19,27 @@ export default function FilmsPage() {
   const sliderRef = useRef<HTMLDivElement>(null);
   const [weddingFilms, setWeddingFilms] = useState<FilmItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeVideoUrl, setActiveVideoUrl] = useState<string | null>(null);
+
+  const getEmbedUrl = (url: string | null) => {
+    if (!url) return null;
+
+    // YouTube
+    const ytRegex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+    const ytMatch = url.match(ytRegex);
+    if (ytMatch && ytMatch[1]) {
+      return `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1&rel=0`;
+    }
+
+    // Vimeo
+    const vimeoRegex = /(?:vimeo\.com\/)(?:video\/)?([0-9]+)/;
+    const vimeoMatch = url.match(vimeoRegex);
+    if (vimeoMatch && vimeoMatch[1]) {
+      return `https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1`;
+    }
+
+    return null;
+  };
 
   useEffect(() => {
     const fetchFilms = async () => {
@@ -86,7 +107,14 @@ export default function FilmsPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 1, delay: 0.4 }}
           >
-            <button className="bg-tertiary text-background px-12 py-5 rounded-full font-body text-xs font-bold tracking-widest hover:scale-105 active:scale-95 transition-all duration-300 gold-glow flex items-center gap-3 mx-auto cursor-pointer">
+            <button 
+              onClick={() => {
+                if (weddingFilms.length > 0 && weddingFilms[0].videoUrl) {
+                  setActiveVideoUrl(weddingFilms[0].videoUrl);
+                }
+              }}
+              className="bg-tertiary text-background px-12 py-5 rounded-full font-body text-xs font-bold tracking-widest hover:scale-105 active:scale-95 transition-all duration-300 gold-glow flex items-center gap-3 mx-auto cursor-pointer"
+            >
               VIEW SHOWREEL <Play className="w-4 h-4 fill-current" />
             </button>
           </motion.div>
@@ -136,7 +164,7 @@ export default function FilmsPage() {
                       key={film.id} 
                       onClick={() => {
                         if (film.videoUrl) {
-                          window.open(film.videoUrl, "_blank");
+                          setActiveVideoUrl(film.videoUrl);
                         }
                       }}
                       className="film-card flex-shrink-0 w-[300px] md:w-[480px] relative cursor-pointer group"
@@ -266,6 +294,56 @@ export default function FilmsPage() {
       </main>
 
       <Footer />
+
+      {/* Lightbox Video Player Modal */}
+      <AnimatePresence>
+        {activeVideoUrl && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/95 backdrop-blur-sm">
+            {/* Backdrop click to close */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setActiveVideoUrl(null)}
+              className="absolute inset-0 cursor-pointer"
+            />
+
+            {/* Close Button */}
+            <button
+              onClick={() => setActiveVideoUrl(null)}
+              className="absolute top-6 right-6 z-50 text-white/70 hover:text-tertiary w-12 h-12 rounded-full border border-white/10 hover:border-tertiary flex items-center justify-center backdrop-blur-md transition-all duration-300 cursor-pointer"
+              title="Close Player"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Video Container */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="relative w-full max-w-5xl aspect-video rounded-2xl overflow-hidden shadow-2xl border border-white/10 z-10 bg-black"
+            >
+              {getEmbedUrl(activeVideoUrl) ? (
+                <iframe
+                  src={getEmbedUrl(activeVideoUrl) || undefined}
+                  className="w-full h-full"
+                  allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+                  allowFullScreen
+                  frameBorder="0"
+                />
+              ) : (
+                <video
+                  src={activeVideoUrl}
+                  controls
+                  autoPlay
+                  className="w-full h-full object-contain"
+                />
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <style jsx global>{`
         @keyframes pulse-slow {
