@@ -475,13 +475,21 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
         if (videoSourceType === "upload" && selectedVideoFile) {
           setUploadStatus("Uploading video file to ImageKit (this may take a few moments)...");
 
+          // Fetch fresh signature & token for the video upload
+          const videoAuthRes = await fetch("/api/imagekit/auth");
+          if (!videoAuthRes.ok) {
+            throw new Error("Failed to authenticate with ImageKit server for video upload");
+          }
+          const videoAuthData = await videoAuthRes.json();
+          const { token: videoToken, expire: videoExpire, signature: videoSignature, publicKey: videoPublicKey } = videoAuthData;
+
           const videoFormData = new FormData();
           videoFormData.append("file", selectedVideoFile);
           videoFormData.append("fileName", selectedVideoFile.name);
-          videoFormData.append("publicKey", publicKey);
-          videoFormData.append("signature", signature);
-          videoFormData.append("expire", expire.toString());
-          videoFormData.append("token", token);
+          videoFormData.append("publicKey", videoPublicKey);
+          videoFormData.append("signature", videoSignature);
+          videoFormData.append("expire", videoExpire.toString());
+          videoFormData.append("token", videoToken);
           videoFormData.append("folder", "/films");
 
           const videoUploadData = await uploadFileWithProgress(selectedVideoFile, videoFormData);
