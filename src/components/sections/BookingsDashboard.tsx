@@ -1371,7 +1371,6 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
                           </span>
                           <input
                             type="file"
-                            required={videoSourceType === "upload"}
                             disabled={isUploading}
                             onChange={(e) => {
                               if (e.target.files && e.target.files.length > 0) {
@@ -1441,7 +1440,6 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
                     </span>
                     <input 
                       type="file" 
-                      required
                       disabled={isUploading}
                       multiple={modalType === "portfolio"}
                       onChange={(e) => {
