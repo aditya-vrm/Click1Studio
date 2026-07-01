@@ -482,7 +482,7 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
           videoFormData.append("signature", signature);
           videoFormData.append("expire", expire.toString());
           videoFormData.append("token", token);
-          videoFormData.append("folder", "/films/videos");
+          videoFormData.append("folder", "/films");
 
           const videoUploadData = await uploadFileWithProgress(selectedVideoFile, videoFormData);
           finalVideoUrl = videoUploadData.url;
@@ -1489,12 +1489,12 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
                       {uploadStatus}
                     </p>
                     <div className="space-y-2 max-h-36 overflow-y-auto scrollbar-none">
-                      {selectedFiles.map((file, index) => {
-                        const progress = uploadProgresses[file.name] || 0;
+                      {Object.keys(uploadProgresses).map((fileName, index) => {
+                        const progress = uploadProgresses[fileName] || 0;
                         return (
                           <div key={index} className="space-y-1">
                             <div className="flex justify-between items-center text-[9px] font-body text-on-surface-variant uppercase tracking-widest">
-                              <span className="truncate max-w-[70%]">{file.name}</span>
+                              <span className="truncate max-w-[70%]">{fileName}</span>
                               <span className="font-semibold text-tertiary">{progress}%</span>
                             </div>
                             <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
