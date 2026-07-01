@@ -186,6 +186,13 @@ export interface FilmItem {
   createdAt: string;
 }
 
+export interface ReelItem {
+  id: string;
+  title: string;
+  videoUrl: string;
+  createdAt: string;
+}
+
 // Mongoose Document Interfaces
 interface IPortfolioItemDocument extends Document {
   title: string;
@@ -234,6 +241,24 @@ const PortfolioItemModel =
 
 const FilmItemModel =
   mongoose.models.FilmItem || mongoose.model<IFilmItemDocument>("FilmItem", FilmItemSchema);
+
+interface IReelItemDocument extends Document {
+  title: string;
+  videoUrl: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const ReelItemSchema = new Schema<IReelItemDocument>(
+  {
+    title: { type: String, required: true },
+    videoUrl: { type: String, required: true },
+  },
+  { timestamps: true }
+);
+
+const ReelItemModel =
+  mongoose.models.ReelItem || mongoose.model<IReelItemDocument>("ReelItem", ReelItemSchema);
 
 // Portfolio Database Helpers
 export async function getPortfolioItems(): Promise<PortfolioItem[]> {
@@ -368,6 +393,56 @@ export async function deleteFilmItem(id: string): Promise<boolean> {
     return !!res;
   } catch (error) {
     console.error("Error deleting film from MongoDB:", error);
+    throw error;
+  }
+}
+
+// Reel Database Helpers
+export async function getReelItems(): Promise<ReelItem[]> {
+  await dbConnect();
+  try {
+    const docs = await ReelItemModel.find({}).sort({ createdAt: -1 });
+    return docs.map((doc) => ({
+      id: doc._id.toString(),
+      title: doc.title,
+      videoUrl: doc.videoUrl,
+      createdAt: doc.createdAt.toISOString(),
+    }));
+  } catch (error) {
+    console.error("Error retrieving reels from MongoDB:", error);
+    throw error;
+  }
+}
+
+export async function saveReelItem(
+  data: Omit<ReelItem, "id" | "createdAt">
+): Promise<ReelItem> {
+  await dbConnect();
+  try {
+    const doc = new ReelItemModel({
+      title: data.title,
+      videoUrl: data.videoUrl,
+    });
+    const savedDoc = await doc.save();
+    return {
+      id: savedDoc._id.toString(),
+      title: savedDoc.title,
+      videoUrl: savedDoc.videoUrl,
+      createdAt: savedDoc.createdAt.toISOString(),
+    };
+  } catch (error) {
+    console.error("Error saving reel to MongoDB:", error);
+    throw error;
+  }
+}
+
+export async function deleteReelItem(id: string): Promise<boolean> {
+  await dbConnect();
+  try {
+    const res = await ReelItemModel.findByIdAndDelete(id);
+    return !!res;
+  } catch (error) {
+    console.error("Error deleting reel from MongoDB:", error);
     throw error;
   }
 }

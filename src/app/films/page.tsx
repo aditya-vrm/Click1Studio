@@ -13,11 +13,20 @@ interface FilmItem {
   duration: string;
   coverImage: string;
   videoUrl?: string;
+  createdAt: string;
+}
+
+interface ReelItem {
+  id: string;
+  title: string;
+  videoUrl: string;
+  createdAt: string;
 }
 
 export default function FilmsPage() {
   const sliderRef = useRef<HTMLDivElement>(null);
   const [weddingFilms, setWeddingFilms] = useState<FilmItem[]>([]);
+  const [reels, setReels] = useState<ReelItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeVideoUrl, setActiveVideoUrl] = useState<string | null>(null);
 
@@ -42,20 +51,27 @@ export default function FilmsPage() {
   };
 
   useEffect(() => {
-    const fetchFilms = async () => {
+    const fetchFilmsAndReels = async () => {
       try {
-        const res = await fetch("/api/films");
-        if (res.ok) {
-          const data = await res.json();
+        const [filmsRes, reelsRes] = await Promise.all([
+          fetch("/api/films"),
+          fetch("/api/reels")
+        ]);
+        if (filmsRes.ok) {
+          const data = await filmsRes.json();
           setWeddingFilms(data);
         }
+        if (reelsRes.ok) {
+          const data = await reelsRes.json();
+          setReels(data);
+        }
       } catch (err) {
-        console.error("Failed to fetch films:", err);
+        console.error("Failed to fetch films/reels:", err);
       } finally {
         setLoading(false);
       }
     };
-    fetchFilms();
+    fetchFilmsAndReels();
   }, []);
 
   const scrollSlider = (direction: "left" | "right") => {
@@ -79,7 +95,7 @@ export default function FilmsPage() {
           <div 
             className="w-full h-full bg-cover bg-center scale-100 animate-pulse-slow" 
             style={{ 
-              backgroundImage: "url('https://images.unsplash.com/photo-1533105079780-92b9be482077?q=80&w=2000&auto=format&fit=crop')",
+              backgroundImage: "url('/images/wedding_night_drone_view.png')",
               animation: "pulse-slow 12s infinite alternate ease-in-out"
             }} 
           />
@@ -219,34 +235,57 @@ export default function FilmsPage() {
 
 
 
-        {/* Drone perspectives */}
-        <section className="max-w-[1440px] mx-auto">
-          <div className="px-6 md:px-20 mb-12">
-            <span className="text-tertiary font-body tracking-[0.3em] uppercase text-xs font-bold">Perspective</span>
-            <h3 className="font-display text-3xl md:text-5xl text-white mt-3 font-semibold uppercase">Aerial Perspectives</h3>
-          </div>
-          
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 px-6 md:px-20">
-            {[
-              { id: 1, loc: "Amalfi Coast", img: "https://images.unsplash.com/photo-1533105079780-92b9be482077?q=80&w=800&auto=format&fit=crop" },
-              { id: 2, loc: "Iceland", img: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=800&auto=format&fit=crop" },
-              { id: 3, loc: "Sahara", img: "https://images.unsplash.com/photo-1533105079780-92b9be482077?q=80&w=800&auto=format&fit=crop" },
-              { id: 4, loc: "Maldives", img: "https://images.unsplash.com/photo-1469371670807-013ccf25f16a?q=80&w=800&auto=format&fit=crop" }
-            ].map((drone) => (
-              <div key={drone.id} className="group cursor-pointer relative aspect-square overflow-hidden rounded-2xl shadow-lg">
+        {/* Reels Section */}
+        {reels.length > 0 && (
+          <section className="max-w-[1440px] mx-auto mt-24">
+            <div className="px-6 md:px-20 mb-12">
+              <span className="text-tertiary font-body tracking-[0.3em] uppercase text-xs font-bold">Short Cinematics</span>
+              <h3 className="font-display text-3xl md:text-5xl text-white mt-3 font-semibold uppercase">Vertical Reels</h3>
+            </div>
+            
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 px-6 md:px-20">
+              {reels.map((reel) => (
                 <div 
-                  className="w-full h-full bg-cover bg-center transition-transform duration-700 group-hover:scale-110" 
-                  style={{ backgroundImage: `url(${drone.img})` }} 
-                />
-                <div className="absolute inset-0 bg-black/30 group-hover:bg-black/50 transition-colors duration-500" />
-                <div className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-500">
-                  <Play className="w-12 h-12 text-white fill-none stroke-[1.2]" />
-                  <span className="mt-3 text-[10px] text-white font-body tracking-[0.5em] uppercase font-bold">{drone.loc}</span>
+                  key={reel.id} 
+                  onClick={() => {
+                    if (reel.videoUrl) {
+                      setActiveVideoUrl(reel.videoUrl);
+                    }
+                  }}
+                  className="group cursor-pointer relative aspect-[9/16] overflow-hidden rounded-2xl shadow-xl bg-surface-container/20 border border-white/5"
+                >
+                  <video 
+                    src={reel.videoUrl} 
+                    className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-85 transition-all duration-700 group-hover:scale-105"
+                    muted
+                    loop
+                    playsInline
+                    onMouseEnter={(e) => {
+                      e.currentTarget.play().catch(() => {});
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.pause();
+                      e.currentTarget.currentTime = 0;
+                    }}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent transition-opacity duration-500" />
+                  
+                  {/* Title overlay */}
+                  <div className="absolute bottom-6 left-6 right-6">
+                    <h4 className="font-display text-lg text-white font-bold uppercase tracking-wide truncate">
+                      {reel.title}
+                    </h4>
+                  </div>
+                  
+                  {/* Play Indicator */}
+                  <div className="absolute top-4 right-4 bg-[#0b0b0b]/80 backdrop-blur-md p-2 rounded-full text-white">
+                    <Play className="w-3 h-3 fill-current text-tertiary" />
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </section>
+              ))}
+            </div>
+          </section>
+        )}
 
       </main>
 

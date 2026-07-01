@@ -22,7 +22,7 @@ import {
   ExternalLink
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Booking, PortfolioItem, FilmItem, TeamMember } from "@/lib/db";
+import { Booking, PortfolioItem, FilmItem, ReelItem, TeamMember } from "@/lib/db";
 
 const categories = [
   { id: "wedding", label: "Wedding" },
@@ -49,9 +49,10 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
   // Media Management State
   const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>([]);
   const [filmItems, setFilmItems] = useState<FilmItem[]>([]);
+  const [reelItems, setReelItems] = useState<ReelItem[]>([]);
   const [loadingMedia, setLoadingMedia] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalType, setModalType] = useState<"portfolio" | "film" | null>(null);
+  const [modalType, setModalType] = useState<"portfolio" | "film" | "reel" | null>(null);
 
   // Team Management State
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
@@ -109,15 +110,18 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
   const fetchMedia = async () => {
     setLoadingMedia(true);
     try {
-      const [portRes, filmRes] = await Promise.all([
+      const [portRes, filmRes, reelRes] = await Promise.all([
         fetch("/api/portfolio"),
-        fetch("/api/films")
+        fetch("/api/films"),
+        fetch("/api/reels")
       ]);
-      if (portRes.ok && filmRes.ok) {
+      if (portRes.ok && filmRes.ok && reelRes.ok) {
         const portData = await portRes.json();
         const filmData = await filmRes.json();
+        const reelData = await reelRes.json();
         setPortfolioItems(portData);
         setFilmItems(filmData);
+        setReelItems(reelData);
       }
     } catch (e) {
       console.error("Error fetching media items:", e);
@@ -307,7 +311,7 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
   // Triggered on modal form submission
   const handleSubmitForm = (e: React.FormEvent) => {
     e.preventDefault();
-    if (selectedFiles.length === 0) {
+    if (modalType !== "reel" && selectedFiles.length === 0) {
       setUploadError("Please select a cover image file to upload.");
       return;
     }
@@ -315,13 +319,19 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
       setUploadError("Please select a video file to upload.");
       return;
     }
+    if (modalType === "reel" && !selectedVideoFile) {
+      setUploadError("Please select a video file for the reel.");
+      return;
+    }
 
     if (modalType === "portfolio") {
       setConfirmMessage(
         `Are you sure you want to upload and publish these ${selectedFiles.length} photographs?`
       );
-    } else {
+    } else if (modalType === "film") {
       setConfirmMessage(`Are you sure you want to upload and publish the new wedding film?`);
+    } else {
+      setConfirmMessage(`Are you sure you want to upload and publish the new vertical Reel?`);
     }
 
     setOnConfirmAction(() => () => {
@@ -333,7 +343,8 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
 
   // ImageKit file upload execution
   const executeFileUpload = async () => {
-    if (selectedFiles.length === 0) return;
+    if (selectedFiles.length === 0 && modalType !== "reel") return;
+    if (modalType === "reel" && !selectedVideoFile) return;
 
     setIsUploading(true);
     setUploadError("");
@@ -341,6 +352,8 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
     // Determine files in the upload queue for progress mapping
     const filesToUpload = [...selectedFiles];
     if (modalType === "film" && videoSourceType === "upload" && selectedVideoFile) {
+      filesToUpload.push(selectedVideoFile);
+    } else if (modalType === "reel" && selectedVideoFile) {
       filesToUpload.push(selectedVideoFile);
     }
 
@@ -445,7 +458,7 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
         }
 
         showToast(`Successfully uploaded ${selectedFiles.length} photographs!`, "success");
-      } else {
+      } else if (modalType === "film") {
         // Single Film Cover upload
         const coverFile = selectedFiles[0];
         setUploadStatus("Uploading cover image to ImageKit...");
@@ -518,6 +531,48 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
         setFilmItems((prev) => [newFilmItem, ...prev]);
 
         showToast("Successfully uploaded and published your new Film!", "success");
+      } else if (modalType === "reel") {
+        setUploadStatus("Uploading reel video to ImageKit...");
+
+        // Fetch signature & token for the reel upload
+        const authRes = await fetch("/api/imagekit/auth");
+        if (!authRes.ok) {
+          throw new Error("Failed to authenticate with ImageKit server");
+        }
+        const authData = await authRes.json();
+        const { token, expire, signature, publicKey } = authData;
+
+        const formData = new FormData();
+        formData.append("file", selectedVideoFile!);
+        formData.append("fileName", selectedVideoFile!.name);
+        formData.append("publicKey", publicKey);
+        formData.append("signature", signature);
+        formData.append("expire", expire.toString());
+        formData.append("token", token);
+        formData.append("folder", "/reels");
+
+        const uploadData = await uploadFileWithProgress(selectedVideoFile!, formData);
+        const reelVideoUrl = uploadData.url;
+
+        setUploadStatus("Saving reel details to Database...");
+
+        const dbRes = await fetch("/api/reels", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: itemTitle || selectedVideoFile!.name.replace(/\.[^/.]+$/, ""),
+            videoUrl: reelVideoUrl,
+          }),
+        });
+
+        if (!dbRes.ok) {
+          throw new Error("Failed to save reel metadata to database");
+        }
+
+        const newReelItem = await dbRes.json();
+        setReelItems((prev) => [newReelItem, ...prev]);
+
+        showToast("Successfully uploaded and published your new Reel!", "success");
       }
 
       // Success Reset
@@ -537,13 +592,17 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
     }
   };
 
-  // Delete handler
-  const handleDeleteMedia = async (id: string, type: "portfolio" | "film") => {
+  const handleDeleteMedia = async (id: string, type: "portfolio" | "film" | "reel") => {
     if (!confirm("Are you sure you want to delete this item? This action cannot be undone.")) return;
 
     setDeletingId(id);
     try {
-      const endpoint = type === "portfolio" ? `/api/portfolio?id=${id}` : `/api/films?id=${id}`;
+      const endpoint = 
+        type === "portfolio" 
+          ? `/api/portfolio?id=${id}` 
+          : type === "film" 
+            ? `/api/films?id=${id}` 
+            : `/api/reels?id=${id}`;
       const res = await fetch(endpoint, {
         method: "DELETE",
       });
@@ -551,8 +610,10 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
       if (res.ok) {
         if (type === "portfolio") {
           setPortfolioItems((prev) => prev.filter((item) => item.id !== id));
-        } else {
+        } else if (type === "film") {
           setFilmItems((prev) => prev.filter((item) => item.id !== id));
+        } else {
+          setReelItems((prev) => prev.filter((item) => item.id !== id));
         }
       } else {
         const data = await res.json();
@@ -1099,6 +1160,83 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
                   </div>
                 )}
               </div>
+
+              {/* SECTION: REELS */}
+              <div className="space-y-8 pt-8 border-t border-white/5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-4">
+                  <div className="flex items-center gap-3">
+                    <FilmIcon className="w-5 h-5 text-tertiary rotate-90" />
+                    <h2 className="font-display text-2xl text-primary uppercase font-bold tracking-wide">
+                      Manage Reels ({reelItems.length})
+                    </h2>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setModalType("reel");
+                      setIsModalOpen(true);
+                    }}
+                    className="inline-flex items-center gap-2 bg-tertiary text-background font-body text-[10px] font-bold tracking-widest py-3.5 px-6 rounded-full uppercase hover:scale-105 active:scale-95 transition-all duration-300 shadow-md cursor-pointer"
+                  >
+                    <PlusCircle className="w-4 h-4" /> Add Reel
+                  </button>
+                </div>
+
+                {reelItems.length === 0 ? (
+                  <p className="font-body text-sm text-on-surface-variant font-light italic">
+                    No reels found. Click "Add Reel" to upload your first vertical video.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-6">
+                    {reelItems.map((item) => (
+                      <div 
+                        key={item.id}
+                        className="group relative bg-surface-container/30 border border-white/5 rounded-xl overflow-hidden aspect-[9/16] flex flex-col justify-end"
+                      >
+                        {/* Video Preview */}
+                        <video 
+                          src={item.videoUrl} 
+                          className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-75 transition-all duration-500"
+                          muted
+                          playsInline
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
+                        
+                        <div className="relative p-4 flex justify-between items-end gap-2 w-full z-10">
+                          <div className="truncate">
+                            <h4 className="font-display text-xs font-bold text-white uppercase tracking-wide truncate mt-1 flex items-center gap-1">
+                              {item.title}
+                              {item.videoUrl && (
+                                <a 
+                                  href={item.videoUrl} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="text-tertiary/60 hover:text-tertiary transition-colors"
+                                  title="View Reel"
+                                >
+                                  <ExternalLink className="w-3 h-3" />
+                                </a>
+                              )}
+                            </h4>
+                          </div>
+
+                          <button
+                            onClick={() => handleDeleteMedia(item.id, "reel")}
+                            disabled={deletingId === item.id}
+                            className="bg-red-950/80 hover:bg-red-700 text-red-300 p-2 rounded-lg border border-red-500/20 hover:border-red-500 transition-all duration-300 shrink-0 cursor-pointer disabled:opacity-50"
+                            title="Delete Reel"
+                          >
+                            {deletingId === item.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </>
           )}
         </div>
@@ -1224,7 +1362,7 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
               </button>
 
               <h3 className="font-display text-2xl text-primary font-bold uppercase tracking-wider mb-2">
-                {modalType === "portfolio" ? "Add Portfolio Photo" : "Add Wedding Film"}
+                {modalType === "portfolio" ? "Add Portfolio Photo" : modalType === "film" ? "Add Wedding Film" : "Add Vertical Reel"}
               </h3>
               <p className="font-body text-xs text-on-surface-variant/70 mb-8 uppercase tracking-widest">
                 Upload your files directly to ImageKit cloud.
@@ -1239,18 +1377,18 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
               <form onSubmit={handleSubmitForm} className="space-y-6">
                 
                 {/* Title */}
-                {modalType === "film" && (
+                {(modalType === "film" || modalType === "reel") && (
                   <div className="space-y-2">
                     <label className="font-body text-[10px] uppercase text-tertiary tracking-widest font-semibold block">
                       Asset Title
                     </label>
                     <input
                       type="text"
-                      required
+                      required={modalType === "film"}
                       value={itemTitle}
                       onChange={(e) => setItemTitle(e.target.value)}
                       disabled={isUploading}
-                      placeholder="ENTER TITLE (E.G. TWILIGHT IN COMO)"
+                      placeholder={modalType === "film" ? "ENTER TITLE (E.G. TWILIGHT IN COMO)" : "ENTER REEL TITLE (OPTIONAL)"}
                       className="w-full bg-transparent border-b border-outline-variant focus:border-tertiary py-3 text-sm text-on-surface placeholder:text-on-surface-variant/30 transition-colors outline-none font-light disabled:opacity-50"
                     />
                   </div>
@@ -1433,34 +1571,62 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
                 )}
 
                 {/* File Upload Area */}
-                <div className="space-y-2">
-                  <label className="font-body text-[10px] uppercase text-tertiary tracking-widest font-semibold block mb-2">
-                    {modalType === "portfolio" ? "Photo File(s)" : "Cover Image File"}
-                  </label>
-                  <label className="flex flex-col items-center justify-center border border-dashed border-white/10 hover:border-tertiary/50 rounded-xl p-8 cursor-pointer transition-all duration-300 bg-surface-container/20 group">
-                    <Upload className="w-8 h-8 text-on-surface-variant/40 group-hover:text-tertiary mb-3 transition-colors" />
-                    <span className="text-xs uppercase tracking-wider text-on-surface-variant group-hover:text-primary transition-colors text-center max-w-[250px] truncate">
-                      {selectedFiles.length > 0
-                        ? selectedFiles.length === 1
-                          ? selectedFiles[0].name
-                          : `${selectedFiles.length} files selected`
-                        : "Select or drag file(s)"}
-                    </span>
-                    <input 
-                      type="file" 
-                      disabled={isUploading}
-                      multiple={modalType === "portfolio"}
-                      onChange={(e) => {
-                        if (e.target.files && e.target.files.length > 0) {
-                          const filesArray = Array.from(e.target.files);
-                          setSelectedFiles(filesArray);
-                        }
-                      }} 
-                      className="hidden" 
-                      accept="image/*" 
-                    />
-                  </label>
-                </div>
+                {modalType !== "reel" && (
+                  <div className="space-y-2">
+                    <label className="font-body text-[10px] uppercase text-tertiary tracking-widest font-semibold block mb-2">
+                      {modalType === "portfolio" ? "Photo File(s)" : "Cover Image File"}
+                    </label>
+                    <label className="flex flex-col items-center justify-center border border-dashed border-white/10 hover:border-tertiary/50 rounded-xl p-8 cursor-pointer transition-all duration-300 bg-surface-container/20 group">
+                      <Upload className="w-8 h-8 text-on-surface-variant/40 group-hover:text-tertiary mb-3 transition-colors" />
+                      <span className="text-xs uppercase tracking-wider text-on-surface-variant group-hover:text-primary transition-colors text-center max-w-[250px] truncate">
+                        {selectedFiles.length > 0
+                          ? selectedFiles.length === 1
+                            ? selectedFiles[0].name
+                            : `${selectedFiles.length} files selected`
+                          : "Select or drag file(s)"}
+                      </span>
+                      <input 
+                        type="file" 
+                        disabled={isUploading}
+                        multiple={modalType === "portfolio"}
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files.length > 0) {
+                            const filesArray = Array.from(e.target.files);
+                            setSelectedFiles(filesArray);
+                          }
+                        }} 
+                        className="hidden" 
+                        accept="image/*" 
+                      />
+                    </label>
+                  </div>
+                )}
+
+                {/* Reel Video File Picker */}
+                {modalType === "reel" && (
+                  <div className="space-y-2">
+                    <label className="font-body text-[10px] uppercase text-tertiary tracking-widest font-semibold block mb-2">
+                      Upload Reel Video (.mp4, .mov, etc.)
+                    </label>
+                    <label className="flex flex-col items-center justify-center border border-dashed border-white/10 hover:border-tertiary/50 rounded-xl p-8 cursor-pointer transition-all duration-300 bg-surface-container/20 group">
+                      <Upload className="w-8 h-8 text-on-surface-variant/40 group-hover:text-tertiary mb-3 transition-colors" />
+                      <span className="text-xs uppercase tracking-wider text-on-surface-variant group-hover:text-primary transition-colors text-center max-w-[250px] truncate">
+                        {selectedVideoFile ? selectedVideoFile.name : "Select Reel Video File"}
+                      </span>
+                      <input
+                        type="file"
+                        disabled={isUploading}
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files.length > 0) {
+                            setSelectedVideoFile(e.target.files[0]);
+                          }
+                        }}
+                        className="hidden"
+                        accept="video/*"
+                      />
+                    </label>
+                  </div>
+                )}
 
                 {/* Submit Panel */}
                 <div className="pt-4 flex gap-4">
@@ -1470,6 +1636,7 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
                     onClick={() => {
                       setIsModalOpen(false);
                       setSelectedFiles([]);
+                      setSelectedVideoFile(null);
                     }}
                     className="flex-1 font-body text-xs uppercase tracking-widest text-on-surface-variant border border-white/10 hover:border-white/30 rounded py-3.5 transition-all duration-300 cursor-pointer disabled:opacity-50"
                   >
@@ -1477,7 +1644,11 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
                   </button>
                   <button
                     type="submit"
-                    disabled={isUploading || selectedFiles.length === 0}
+                    disabled={
+                      isUploading || 
+                      (modalType !== "reel" && selectedFiles.length === 0) || 
+                      (modalType === "reel" && !selectedVideoFile)
+                    }
                     className="flex-1 bg-tertiary hover:bg-tertiary/90 text-background font-body text-xs font-bold uppercase tracking-widest rounded py-3.5 transition-all duration-300 cursor-pointer shadow-lg shadow-tertiary/20 disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     {isUploading ? (

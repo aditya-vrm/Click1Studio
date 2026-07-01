@@ -27,7 +27,7 @@ export default function Hero() {
         <div 
           className="w-full h-full bg-cover bg-center"
           style={{
-            backgroundImage: "url('https://images.unsplash.com/photo-1519741497674-611481863552?q=80&w=2070&auto=format&fit=crop')",
+            backgroundImage: "url('/images/home_hero_bg.png')",
             animation: "hero-zoom 25s infinite alternate ease-in-out"
           }}
         >
