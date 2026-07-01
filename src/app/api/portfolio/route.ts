@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { getPortfolioItems, savePortfolioItem, deletePortfolioItem } from "@/lib/db";
+import { getPortfolioItems, savePortfolioItem, deletePortfolioItem, setPortfolioItemCover } from "@/lib/db";
 
 // Initial seed data for Portfolio
 const initialPortfolioItems = [
@@ -116,5 +116,32 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ message: "Portfolio item deleted successfully" });
   } catch (error) {
     return NextResponse.json({ error: "Failed to delete portfolio item" }, { status: 500 });
+  }
+}
+
+// PUT: Update cover photo status (Admin only)
+export async function PUT(req: NextRequest) {
+  try {
+    const isAuthenticated = await checkAdminAuth();
+    if (!isAuthenticated) {
+      return NextResponse.json({ error: "Unauthorized access" }, { status: 401 });
+    }
+
+    const body = await req.json();
+    const { id } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: "Missing item ID" }, { status: 400 });
+    }
+
+    const success = await setPortfolioItemCover(id);
+    if (!success) {
+      return NextResponse.json({ error: "Portfolio item not found" }, { status: 404 });
+    }
+
+    const updatedItems = await getPortfolioItems();
+    return NextResponse.json(updatedItems);
+  } catch (error) {
+    return NextResponse.json({ error: "Failed to update album cover" }, { status: 500 });
   }
 }

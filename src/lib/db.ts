@@ -172,6 +172,7 @@ export interface PortfolioItem {
     | "events"
     | "branding";
   image: string;
+  isCover?: boolean;
   createdAt: string;
 }
 
@@ -190,6 +191,7 @@ interface IPortfolioItemDocument extends Document {
   title: string;
   category: string;
   image: string;
+  isCover?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -210,6 +212,7 @@ const PortfolioItemSchema = new Schema<IPortfolioItemDocument>(
     title: { type: String, required: true },
     category: { type: String, required: true },
     image: { type: String, required: true },
+    isCover: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
@@ -242,6 +245,7 @@ export async function getPortfolioItems(): Promise<PortfolioItem[]> {
       title: doc.title,
       category: doc.category as any,
       image: doc.image,
+      isCover: !!doc.isCover,
       createdAt: doc.createdAt.toISOString(),
     }));
   } catch (error) {
@@ -251,7 +255,7 @@ export async function getPortfolioItems(): Promise<PortfolioItem[]> {
 }
 
 export async function savePortfolioItem(
-  data: Omit<PortfolioItem, "id" | "createdAt">
+  data: Omit<PortfolioItem, "id" | "createdAt" | "isCover">
 ): Promise<PortfolioItem> {
   await dbConnect();
   try {
@@ -259,6 +263,7 @@ export async function savePortfolioItem(
       title: data.title,
       category: data.category,
       image: data.image,
+      isCover: false,
     });
     const savedDoc = await doc.save();
     return {
@@ -266,6 +271,7 @@ export async function savePortfolioItem(
       title: savedDoc.title,
       category: savedDoc.category as any,
       image: savedDoc.image,
+      isCover: !!savedDoc.isCover,
       createdAt: savedDoc.createdAt.toISOString(),
     };
   } catch (error) {
@@ -281,6 +287,28 @@ export async function deletePortfolioItem(id: string): Promise<boolean> {
     return !!res;
   } catch (error) {
     console.error("Error deleting portfolio item from MongoDB:", error);
+    throw error;
+  }
+}
+
+export async function setPortfolioItemCover(id: string): Promise<boolean> {
+  await dbConnect();
+  try {
+    const target = await PortfolioItemModel.findById(id);
+    if (!target) return false;
+
+    // Unset current covers in that category
+    await PortfolioItemModel.updateMany(
+      { category: target.category },
+      { isCover: false }
+    );
+
+    // Set new cover
+    target.isCover = true;
+    await target.save();
+    return true;
+  } catch (error) {
+    console.error("Error setting portfolio cover in MongoDB:", error);
     throw error;
   }
 }
@@ -343,4 +371,104 @@ export async function deleteFilmItem(id: string): Promise<boolean> {
     throw error;
   }
 }
+
+// Team Member Types
+export interface TeamMember {
+  id: string;
+  name: string;
+  role: string;
+  image: string;
+  bio: string;
+  order: number;
+}
+
+// Mongoose Document Interface
+interface ITeamMemberDocument extends Document {
+  name: string;
+  role: string;
+  image: string;
+  bio: string;
+  order: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Team Member Schema
+const TeamMemberSchema = new Schema<ITeamMemberDocument>(
+  {
+    name: { type: String, required: true },
+    role: { type: String, required: true },
+    image: { type: String, required: true },
+    bio: { type: String, default: "" },
+    order: { type: Number, required: true },
+  },
+  { timestamps: true }
+);
+
+// Model
+const TeamMemberModel =
+  mongoose.models.TeamMember || mongoose.model<ITeamMemberDocument>("TeamMember", TeamMemberSchema);
+
+// Team Member Database Helpers
+export async function getTeamMembers(): Promise<TeamMember[]> {
+  await dbConnect();
+  try {
+    const docs = await TeamMemberModel.find({}).sort({ order: 1 });
+    return docs.map((doc) => ({
+      id: doc._id.toString(),
+      name: doc.name,
+      role: doc.role,
+      image: doc.image,
+      bio: doc.bio,
+      order: doc.order,
+    }));
+  } catch (error) {
+    console.error("Error retrieving team members from MongoDB:", error);
+    throw error;
+  }
+}
+
+export async function saveTeamMember(
+  data: Omit<TeamMember, "id">
+): Promise<TeamMember> {
+  await dbConnect();
+  try {
+    const doc = new TeamMemberModel(data);
+    const savedDoc = await doc.save();
+    return {
+      id: savedDoc._id.toString(),
+      name: savedDoc.name,
+      role: savedDoc.role,
+      image: savedDoc.image,
+      bio: savedDoc.bio,
+      order: savedDoc.order,
+    };
+  } catch (error) {
+    console.error("Error saving team member to MongoDB:", error);
+    throw error;
+  }
+}
+
+export async function updateTeamMember(
+  id: string,
+  data: Partial<Omit<TeamMember, "id">>
+): Promise<TeamMember | null> {
+  await dbConnect();
+  try {
+    const doc = await TeamMemberModel.findByIdAndUpdate(id, data, { new: true });
+    if (!doc) return null;
+    return {
+      id: doc._id.toString(),
+      name: doc.name,
+      role: doc.role,
+      image: doc.image,
+      bio: doc.bio,
+      order: doc.order,
+    };
+  } catch (error) {
+    console.error("Error updating team member in MongoDB:", error);
+    throw error;
+  }
+}
+
 

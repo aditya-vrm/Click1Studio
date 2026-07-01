@@ -19,6 +19,7 @@ interface GalleryItem {
     | "events"
     | "branding";
   image: string;
+  isCover?: boolean;
 }
 
 const ALBUMS = [
@@ -213,8 +214,9 @@ export default function PortfolioPage() {
               {ALBUMS.map((album, idx) => {
                 // Find items matching this category
                 const albumPhotos = galleryItems.filter((item) => item.category === album.key);
-                // Cover image is the latest uploaded image, falling back to default cover
-                const coverImage = albumPhotos.length > 0 ? albumPhotos[0].image : album.defaultCover;
+                // Cover image is the designated cover or fallback to latest photo, then default cover
+                const coverItem = albumPhotos.find((item) => item.isCover);
+                const coverImage = coverItem ? coverItem.image : (albumPhotos.length > 0 ? albumPhotos[0].image : album.defaultCover);
 
                 return (
                   <motion.div
@@ -322,25 +324,22 @@ export default function PortfolioPage() {
                     </p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                  <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-6">
                     {currentAlbumItems.map((item, idx) => (
                       <motion.div
                         key={item.id}
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.4, delay: Math.min(idx * 0.05, 0.5) }}
                         onClick={() => setLightboxImageIndex(idx)}
-                        className="relative aspect-square rounded-xl overflow-hidden group cursor-zoom-in bg-surface-container/20 border border-white/5 hover:border-tertiary/20 shadow-lg"
+                        className="break-inside-avoid mb-6 relative rounded-xl overflow-hidden group cursor-zoom-in bg-surface-container/20 border border-white/5 hover:border-tertiary/20 shadow-lg"
                       >
                         <img
                           src={item.image}
-                          alt={item.title}
-                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                          alt=""
+                          className="w-full h-auto object-contain transition-transform duration-700 group-hover:scale-[1.02]"
                         />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
-                          <h4 className="text-white text-xs font-bold font-body uppercase tracking-wider truncate mb-1">
-                            {item.title}
-                          </h4>
+                        <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
                           <span className="text-tertiary text-[9px] uppercase tracking-widest font-semibold flex items-center gap-1.5 font-body">
                             <Eye className="w-3 h-3" /> Expand
                           </span>
@@ -388,7 +387,7 @@ export default function PortfolioPage() {
                 exit={{ opacity: 0, scale: 0.98 }}
                 transition={{ duration: 0.3 }}
                 src={currentAlbumItems[lightboxImageIndex].image}
-                alt={currentAlbumItems[lightboxImageIndex].title}
+                alt=""
                 className="max-w-full max-h-[80vh] object-contain rounded shadow-2xl border border-white/5"
               />
               
@@ -397,9 +396,6 @@ export default function PortfolioPage() {
                 <p className="font-body text-[10px] text-tertiary tracking-[0.25em] uppercase font-semibold">
                   {lightboxImageIndex + 1} / {currentAlbumItems.length}
                 </p>
-                <h4 className="font-display text-lg md:text-xl text-white font-bold uppercase tracking-wide">
-                  {currentAlbumItems[lightboxImageIndex].title}
-                </h4>
               </div>
             </div>
 

@@ -7,45 +7,92 @@ import * as THREE from "three";
 import { motion, AnimatePresence } from "framer-motion";
 
 function AnimatedMesh() {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const ringRef = useRef<THREE.Mesh>(null);
+  const groupRef = useRef<THREE.Group>(null);
 
   useFrame((state) => {
     const time = state.clock.getElapsedTime();
-    if (meshRef.current) {
-      meshRef.current.rotation.x = time * 0.4;
-      meshRef.current.rotation.y = time * 0.3;
-    }
-    if (ringRef.current) {
-      ringRef.current.rotation.y = -time * 0.2;
-      ringRef.current.rotation.z = time * 0.1;
+    if (groupRef.current) {
+      groupRef.current.rotation.y = time * 0.35;
+      groupRef.current.rotation.x = Math.sin(time * 0.25) * 0.15;
     }
   });
 
   return (
-    <group>
-      {/* Central glowing geometry representing lens/iris in 3D */}
-      <mesh ref={meshRef}>
-        <icosahedronGeometry args={[1.6, 2]} />
+    <group ref={groupRef}>
+      {/* 3D Camera Body Box */}
+      <mesh position={[0, 0, 0]}>
+        <boxGeometry args={[2.0, 1.3, 0.7]} />
         <meshStandardMaterial
           color="#ecc246"
           wireframe
           transparent
           opacity={0.35}
           emissive="#ecc246"
-          emissiveIntensity={0.8}
+          emissiveIntensity={0.6}
         />
       </mesh>
-      
-      {/* Outer Orbit Ring */}
-      <mesh ref={ringRef} rotation={[Math.PI / 4, 0, 0]}>
-        <torusGeometry args={[2.5, 0.04, 16, 100]} />
-        <meshStandardMaterial 
-          color="#ecc246" 
-          roughness={0.1}
-          metalness={0.9}
+
+      {/* Top Viewfinder Cap */}
+      <mesh position={[0, 0.75, 0]}>
+        <boxGeometry args={[0.6, 0.25, 0.5]} />
+        <meshStandardMaterial
+          color="#ecc246"
+          wireframe
+          transparent
+          opacity={0.3}
           emissive="#ecc246"
-          emissiveIntensity={0.3}
+          emissiveIntensity={0.5}
+        />
+      </mesh>
+
+      {/* Protruding Lens Barrel Cylinder (pointing out along Z) */}
+      <mesh position={[0, 0, 0.65]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[0.55, 0.55, 0.7, 24]} />
+        <meshStandardMaterial
+          color="#ecc246"
+          wireframe
+          transparent
+          opacity={0.45}
+          emissive="#ecc246"
+          emissiveIntensity={0.7}
+        />
+      </mesh>
+
+      {/* Lens Glass (sphere inside barrel) */}
+      <mesh position={[0, 0, 0.8]}>
+        <sphereGeometry args={[0.38, 16, 16]} />
+        <meshStandardMaterial
+          color="#ecc246"
+          transparent
+          opacity={0.65}
+          emissive="#ecc246"
+          emissiveIntensity={0.9}
+        />
+      </mesh>
+
+      {/* Shutter Button (small cylinder on top left) */}
+      <mesh position={[-0.65, 0.7, 0]} rotation={[0, 0, 0]}>
+        <cylinderGeometry args={[0.12, 0.12, 0.15, 12]} />
+        <meshStandardMaterial
+          color="#ecc246"
+          wireframe
+          transparent
+          opacity={0.3}
+          emissive="#ecc246"
+          emissiveIntensity={0.5}
+        />
+      </mesh>
+
+      {/* Mode Dial (small cylinder on top right) */}
+      <mesh position={[0.65, 0.7, 0]} rotation={[0, 0, 0]}>
+        <cylinderGeometry args={[0.15, 0.15, 0.1, 12]} />
+        <meshStandardMaterial
+          color="#ecc246"
+          wireframe
+          transparent
+          opacity={0.3}
+          emissive="#ecc246"
+          emissiveIntensity={0.5}
         />
       </mesh>
     </group>

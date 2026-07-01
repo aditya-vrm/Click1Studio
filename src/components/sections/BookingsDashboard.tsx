@@ -22,7 +22,18 @@ import {
   ExternalLink
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Booking, PortfolioItem, FilmItem } from "@/lib/db";
+import { Booking, PortfolioItem, FilmItem, TeamMember } from "@/lib/db";
+
+const categories = [
+  { id: "wedding", label: "Wedding" },
+  { id: "pre-wedding", label: "Pre-Wedding" },
+  { id: "engagement", label: "Engagement" },
+  { id: "birthday", label: "Birthday" },
+  { id: "drone-shots", label: "Drone Shots" },
+  { id: "lifestyle-portrait", label: "Lifestyle Portrait" },
+  { id: "events", label: "Events" },
+  { id: "branding", label: "Branding" }
+] as const;
 
 interface BookingsDashboardProps {
   initialBookings: Booking[];
@@ -30,7 +41,7 @@ interface BookingsDashboardProps {
 
 export default function BookingsDashboard({ initialBookings }: BookingsDashboardProps) {
   // Navigation & Base State
-  const [activeTab, setActiveTab] = useState<"bookings" | "media">("bookings");
+  const [activeTab, setActiveTab] = useState<"bookings" | "media" | "team">("bookings");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedEventType, setSelectedEventType] = useState("all");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -42,13 +53,19 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState<"portfolio" | "film" | null>(null);
 
+  // Team Management State
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [loadingTeam, setLoadingTeam] = useState(false);
+  const [updatingTeamId, setUpdatingTeamId] = useState<string | null>(null);
+  const [updatingTeamStatus, setUpdatingTeamStatus] = useState("");
+
   // Form States
   const [itemTitle, setItemTitle] = useState("");
   const [itemCategory, setItemCategory] = useState<PortfolioItem["category"]>("wedding");
   const [itemLocation, setItemLocation] = useState("");
   const [itemDuration, setItemDuration] = useState("");
   const [itemVideoUrl, setItemVideoUrl] = useState("");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   
   // Upload Progress & State
   const [isUploading, setIsUploading] = useState(false);
@@ -57,6 +74,24 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
   
   // Deleting State
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Cropping States
+  const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
+  const [cropZoom, setCropZoom] = useState(1);
+  const [cropOffset, setCropOffset] = useState({ x: 0, y: 0 });
+  const [isDragStart, setIsDragStart] = useState(false);
+  const [dragStartPos, setDragStartPos] = useState({ x: 0, y: 0 });
+  const [cropCallback, setCropCallback] = useState<((croppedFile: File | null) => void) | null>(null);
+  const [cropOriginalName, setCropOriginalName] = useState("");
+
+  // Confirmation Modal States
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const [confirmMessage, setConfirmMessage] = useState("");
+  const [onConfirmAction, setOnConfirmAction] = useState<(() => void) | null>(null);
+
+  // Success Modal States
+  const [successModalOpen, setSuccessModalOpen] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
 
   // Fetch portfolio & films
   const fetchMedia = async () => {
@@ -79,10 +114,28 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
     }
   };
 
-  // Trigger fetch when changing to media tab
+  // Fetch team members
+  const fetchTeam = async () => {
+    setLoadingTeam(true);
+    try {
+      const res = await fetch("/api/team");
+      if (res.ok) {
+        const data = await res.json();
+        setTeamMembers(data);
+      }
+    } catch (e) {
+      console.error("Error fetching team members:", e);
+    } finally {
+      setLoadingTeam(false);
+    }
+  };
+
+  // Trigger fetch when changing to tabs
   useEffect(() => {
     if (activeTab === "media") {
       fetchMedia();
+    } else if (activeTab === "team") {
+      fetchTeam();
     }
   }, [activeTab]);
 
@@ -153,74 +206,210 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
     }
   };
 
-  // ImageKit file upload handler
-  const handleFileUpload = async (e: React.FormEvent) => {
+  const startImageCrop = (file: File): Promise<File | null> => {
+    return new Promise((resolve) => {
+      setCropOriginalName(file.name);
+      const reader = new FileReader();
+      reader.onload = () => {
+        setCropImageSrc(reader.result as string);
+        setCropZoom(1);
+        setCropOffset({ x: 0, y: 0 });
+        setCropCallback(() => (cropped: File | null) => {
+          resolve(cropped);
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleCropImage = () => {
+    if (!cropImageSrc || !cropCallback) return;
+
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.src = cropImageSrc;
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 800;
+      canvas.height = 800;
+      const ctx = canvas.getContext("2d");
+
+      if (ctx) {
+        ctx.clearRect(0, 0, 800, 800);
+        const containerSize = 320;
+        const fitScale = Math.min(containerSize / img.width, containerSize / img.height);
+        
+        ctx.save();
+        ctx.translate(400, 400);
+        ctx.scale(cropZoom, cropZoom);
+        
+        const scaleFactor = 800 / containerSize;
+        ctx.translate(
+          (cropOffset.x * scaleFactor) / cropZoom,
+          (cropOffset.y * scaleFactor) / cropZoom
+        );
+        
+        ctx.drawImage(img, -img.width / 2, -img.height / 2, img.width, img.height);
+        ctx.restore();
+
+        try {
+          const croppedDataUrl = canvas.toDataURL("image/jpeg", 0.95);
+          const croppedFile = dataURLtoFile(croppedDataUrl, cropOriginalName || "cropped-image.jpg");
+          cropCallback(croppedFile);
+        } catch (err) {
+          console.error("Cropping draw error:", err);
+          cropCallback(null);
+        }
+      } else {
+        cropCallback(null);
+      }
+      setCropImageSrc(null);
+      setCropZoom(1);
+      setCropOffset({ x: 0, y: 0 });
+      setCropCallback(null);
+    };
+  };
+
+  const dataURLtoFile = (dataurl: string, filename: string): File => {
+    const arr = dataurl.split(",");
+    const mime = arr[0].match(/:(.*?);/)![1];
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new File([u8arr], filename, { type: mime });
+  };
+
+  // Triggered on modal form submission
+  const handleSubmitForm = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedFile) {
-      setUploadError("Please select a file to upload.");
+    if (selectedFiles.length === 0) {
+      setUploadError("Please select at least one file to upload.");
       return;
     }
 
+    if (modalType === "portfolio") {
+      setConfirmMessage(
+        `Are you sure you want to upload and publish these ${selectedFiles.length} photographs?`
+      );
+    } else {
+      setConfirmMessage(`Are you sure you want to upload and publish the new wedding film?`);
+    }
+
+    setOnConfirmAction(() => () => {
+      setConfirmModalOpen(false);
+      executeFileUpload();
+    });
+    setConfirmModalOpen(true);
+  };
+
+  // ImageKit file upload execution
+  const executeFileUpload = async () => {
+    if (selectedFiles.length === 0) return;
+
     setIsUploading(true);
     setUploadError("");
-    setUploadStatus("Acquiring security signature...");
 
     try {
-      // 1. Fetch auth signature, public key, and urlEndpoint from server
-      const authRes = await fetch("/api/imagekit/auth");
-      if (!authRes.ok) {
-        throw new Error("Failed to authenticate with ImageKit server");
-      }
-      const authData = await authRes.json();
-      const { token, expire, signature, publicKey } = authData;
-
-      setUploadStatus("Uploading file to ImageKit Cloud...");
-
-      // 2. Prepare FormData for ImageKit direct API upload
-      const formData = new FormData();
-      formData.append("file", selectedFile);
-      formData.append("fileName", selectedFile.name);
-      formData.append("publicKey", publicKey);
-      formData.append("signature", signature);
-      formData.append("expire", expire.toString());
-      formData.append("token", token);
-      formData.append("folder", modalType === "portfolio" ? "/portfolio" : "/films");
-
-      // 3. POST upload request to ImageKit
-      const uploadRes = await fetch("https://upload.imagekit.io/api/v1/files/upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!uploadRes.ok) {
-        const uploadErrData = await uploadRes.json();
-        throw new Error(uploadErrData.message || "Upload to ImageKit failed");
-      }
-
-      const uploadData = await uploadRes.json();
-      const fileUrl = uploadData.url;
-
-      setUploadStatus("Saving metadata to Database...");
-
-      // 4. Save metadata to MongoDB via local API
       if (modalType === "portfolio") {
-        const dbRes = await fetch("/api/portfolio", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title: itemTitle,
-            category: itemCategory,
-            image: fileUrl,
-          }),
-        });
+        // Upload multiple portfolio photos
+        for (let i = 0; i < selectedFiles.length; i++) {
+          const file = selectedFiles[i];
+          const progressLabel = `Uploading photo ${i + 1} of ${selectedFiles.length}...`;
+          setUploadStatus(progressLabel);
 
-        if (!dbRes.ok) {
-          throw new Error("Failed to save portfolio metadata to database");
+          // 1. Fetch signature
+          const authRes = await fetch("/api/imagekit/auth");
+          if (!authRes.ok) {
+            throw new Error(`Failed to acquire signature for photo ${i + 1}`);
+          }
+          const authData = await authRes.json();
+          const { token, expire, signature, publicKey } = authData;
+
+          // 2. Prepare FormData
+          const formData = new FormData();
+          formData.append("file", file);
+          formData.append("fileName", file.name);
+          formData.append("publicKey", publicKey);
+          formData.append("signature", signature);
+          formData.append("expire", expire.toString());
+          formData.append("token", token);
+          formData.append("folder", "/portfolio");
+
+          // 3. Upload to ImageKit
+          const uploadRes = await fetch("https://upload.imagekit.io/api/v1/files/upload", {
+            method: "POST",
+            body: formData,
+          });
+
+          if (!uploadRes.ok) {
+            throw new Error(`Upload failed for photo ${i + 1}`);
+          }
+
+          const uploadData = await uploadRes.json();
+          const fileUrl = uploadData.url;
+
+          // Extract title from file name (removing extension)
+          const autoTitle = file.name.replace(/\.[^/.]+$/, "");
+
+          // 4. Save metadata to Database
+          const dbRes = await fetch("/api/portfolio", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: autoTitle,
+              category: itemCategory,
+              image: fileUrl,
+            }),
+          });
+
+          if (!dbRes.ok) {
+            throw new Error(`Failed to save database record for photo ${i + 1}`);
+          }
+
+          const newPortfolioItem = await dbRes.json();
+          setPortfolioItems((prev) => [newPortfolioItem, ...prev]);
         }
 
-        const newPortfolioItem = await dbRes.json();
-        setPortfolioItems((prev) => [newPortfolioItem, ...prev]);
+        // Show proper Success Modal!
+        setSuccessMessage(`Successfully uploaded and published ${selectedFiles.length} photographs!`);
       } else {
+        // Single Film Cover upload
+        const file = selectedFiles[0];
+        setUploadStatus("Uploading cover image to ImageKit...");
+
+        const authRes = await fetch("/api/imagekit/auth");
+        if (!authRes.ok) {
+          throw new Error("Failed to authenticate with ImageKit server");
+        }
+        const authData = await authRes.json();
+        const { token, expire, signature, publicKey } = authData;
+
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("fileName", file.name);
+        formData.append("publicKey", publicKey);
+        formData.append("signature", signature);
+        formData.append("expire", expire.toString());
+        formData.append("token", token);
+        formData.append("folder", "/films");
+
+        const uploadRes = await fetch("https://upload.imagekit.io/api/v1/files/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!uploadRes.ok) {
+          throw new Error("Upload failed for cover image");
+        }
+
+        const uploadData = await uploadRes.json();
+        const fileUrl = uploadData.url;
+
+        setUploadStatus("Saving film details to Database...");
+
         const dbRes = await fetch("/api/films", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -239,6 +428,8 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
 
         const newFilmItem = await dbRes.json();
         setFilmItems((prev) => [newFilmItem, ...prev]);
+
+        setSuccessMessage(`Successfully uploaded and published your new Film!`);
       }
 
       // Success Reset
@@ -247,8 +438,9 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
       setItemLocation("");
       setItemDuration("");
       setItemVideoUrl("");
-      setSelectedFile(null);
+      setSelectedFiles([]);
       setUploadStatus("");
+      setSuccessModalOpen(true);
     } catch (err: any) {
       setUploadError(err.message || "An unexpected error occurred during upload.");
     } finally {
@@ -283,6 +475,120 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
     } finally {
       setDeletingId(null);
     }
+  };
+
+  const handleSetAlbumCover = async (itemId: string) => {
+    try {
+      const res = await fetch("/api/portfolio", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: itemId }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to set cover image");
+      }
+
+      const updatedItems = await res.json();
+      setPortfolioItems(updatedItems);
+      
+      setSuccessMessage("Successfully set this photo as the album cover!");
+      setSuccessModalOpen(true);
+    } catch (err: any) {
+      alert(err.message || "Failed to set album cover.");
+    }
+  };
+
+  // Team Photo update handler
+  const handleTeamPhotoChange = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    memberId: string
+  ) => {
+    if (!e.target.files || !e.target.files[0]) return;
+    const originalFile = e.target.files[0];
+
+    // Crop the image first!
+    const file = await startImageCrop(originalFile);
+    if (!file) return;
+
+    // Show Confirmation Dialog before proceeding!
+    const member = teamMembers.find((m) => m.id === memberId);
+    const memberName = member ? member.name : "this team member";
+
+    setConfirmMessage(`Are you sure you want to update the profile picture for ${memberName}?`);
+    setOnConfirmAction(() => async () => {
+      setConfirmModalOpen(false);
+      setUpdatingTeamId(memberId);
+      setUpdatingTeamStatus("Signing request...");
+
+      try {
+        // 1. Fetch auth signature, public key, and urlEndpoint from server
+        const authRes = await fetch("/api/imagekit/auth");
+        if (!authRes.ok) {
+          throw new Error("Failed to authenticate with ImageKit server");
+        }
+        const authData = await authRes.json();
+        const { token, expire, signature, publicKey } = authData;
+
+        setUpdatingTeamStatus("Uploading to ImageKit...");
+
+        // 2. Prepare FormData
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("fileName", `team-${memberId}-${file.name}`);
+        formData.append("publicKey", publicKey);
+        formData.append("signature", signature);
+        formData.append("expire", expire.toString());
+        formData.append("token", token);
+        formData.append("folder", "/team");
+
+        // 3. Upload to ImageKit
+        const uploadRes = await fetch("https://upload.imagekit.io/api/v1/files/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!uploadRes.ok) {
+          const uploadErrData = await uploadRes.json();
+          throw new Error(uploadErrData.message || "Upload failed");
+        }
+
+        const uploadData = await uploadRes.json();
+        const fileUrl = uploadData.url;
+
+        setUpdatingTeamStatus("Saving changes...");
+
+        // 4. Update in MongoDB via API
+        const dbRes = await fetch("/api/team", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: memberId,
+            image: fileUrl,
+          }),
+        });
+
+        if (!dbRes.ok) {
+          throw new Error("Failed to save image changes to database");
+        }
+
+        const updatedMember = await dbRes.json();
+
+        // 5. Update local state
+        setTeamMembers((prev) =>
+          prev.map((m) => (m.id === memberId ? updatedMember : m))
+        );
+
+        setSuccessMessage(`Successfully updated profile picture for ${memberName}!`);
+        setSuccessModalOpen(true);
+      } catch (err: any) {
+        alert(err.message || "Failed to update team member photo.");
+      } finally {
+        setUpdatingTeamId(null);
+        setUpdatingTeamStatus("");
+      }
+    });
+    setConfirmModalOpen(true);
   };
 
   return (
@@ -337,6 +643,20 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
         >
           Manage Gallery & Films
           {activeTab === "media" && (
+            <motion.span 
+              layoutId="activeTabUnderline" 
+              className="absolute bottom-[-17px] left-0 w-full h-[2px] bg-tertiary"
+            />
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab("team")}
+          className={`font-body text-xs font-bold uppercase tracking-[0.2em] py-2 relative cursor-pointer transition-colors duration-300 ${
+            activeTab === "team" ? "text-tertiary" : "text-on-surface-variant/60 hover:text-primary"
+          }`}
+        >
+          Manage Team
+          {activeTab === "team" && (
             <motion.span 
               layoutId="activeTabUnderline" 
               className="absolute bottom-[-17px] left-0 w-full h-[2px] bg-tertiary"
@@ -517,44 +837,98 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
                     No portfolio photos found. Click "Add Photo" to upload your first asset.
                   </p>
                 ) : (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                    {portfolioItems.map((item) => (
-                      <div 
-                        key={item.id}
-                        className="group relative bg-surface-container/30 border border-white/5 rounded-xl overflow-hidden aspect-square flex flex-col justify-end"
-                      >
-                        <img 
-                          src={item.image} 
-                          alt={item.title} 
-                          className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-all duration-500 group-hover:scale-105"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                        
-                        <div className="relative p-4 flex justify-between items-end gap-2 w-full z-10">
-                          <div className="truncate">
-                            <span className="text-[8px] bg-tertiary/10 text-tertiary border border-tertiary/20 uppercase font-semibold px-2 py-0.5 rounded-full font-body tracking-wider">
-                              {item.category}
-                            </span>
-                            <h4 className="font-body text-xs font-bold text-white uppercase tracking-wider truncate mt-2">
-                              {item.title}
-                            </h4>
+                  <div className="space-y-12">
+                    {categories.map((cat) => {
+                      const catItems = portfolioItems.filter((item) => item.category === cat.id);
+                      return (
+                        <div key={cat.id} className="space-y-4 border border-white/5 bg-surface-container/10 p-6 rounded-2xl">
+                          <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                            <h3 className="font-display text-sm font-semibold uppercase tracking-wider text-primary flex items-center gap-2">
+                              <span className="w-1.5 h-1.5 rounded-full bg-tertiary" />
+                              {cat.label} Album ({catItems.length})
+                            </h3>
+                            <button
+                              onClick={() => {
+                                setModalType("portfolio");
+                                setIsModalOpen(true);
+                                setItemCategory(cat.id);
+                              }}
+                              className="font-body text-[8px] uppercase tracking-widest text-tertiary hover:text-white transition-colors cursor-pointer border border-tertiary/20 hover:border-white/20 py-1 px-3.5 rounded-full"
+                            >
+                              Add to {cat.label}
+                            </button>
                           </div>
 
-                          <button
-                            onClick={() => handleDeleteMedia(item.id, "portfolio")}
-                            disabled={deletingId === item.id}
-                            className="bg-red-950/80 hover:bg-red-700 text-red-300 p-2 rounded-lg border border-red-500/20 hover:border-red-500 transition-all duration-300 shrink-0 cursor-pointer disabled:opacity-50"
-                            title="Delete Photo"
-                          >
-                            {deletingId === item.id ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                              <Trash2 className="w-3.5 h-3.5" />
-                            )}
-                          </button>
+                          {catItems.length === 0 ? (
+                            <p className="font-body text-[10px] text-on-surface-variant/40 uppercase tracking-wider font-light py-2">
+                              No photos in this album yet.
+                            </p>
+                          ) : (
+                            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4">
+                              {catItems.map((item) => (
+                                <div
+                                  key={item.id}
+                                  className="group relative bg-surface-container/30 border border-white/5 rounded-xl overflow-hidden aspect-square flex flex-col justify-between"
+                                >
+                                  {/* Hover Actions Bar */}
+                                  <div className="absolute top-2 left-2 right-2 flex justify-between items-center z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                    {/* Set Cover Button / Indicator */}
+                                    {item.isCover ? (
+                                      <span className="text-[7px] bg-tertiary text-background uppercase font-bold px-2 py-0.5 rounded-full font-body tracking-wider shadow">
+                                        Cover
+                                      </span>
+                                    ) : (
+                                      <button
+                                        onClick={() => handleSetAlbumCover(item.id)}
+                                        className="text-[7px] bg-black/85 hover:bg-tertiary hover:text-background text-tertiary border border-tertiary/30 uppercase font-bold px-2 py-0.5 rounded-full font-body tracking-wider transition-colors shadow cursor-pointer animate-none"
+                                      >
+                                        Set Cover
+                                      </button>
+                                    )}
+
+                                    {/* Delete Button */}
+                                    <button
+                                      onClick={() => handleDeleteMedia(item.id, "portfolio")}
+                                      disabled={deletingId === item.id}
+                                      className="bg-black/85 hover:bg-red-700 text-red-400 p-1.5 rounded-md border border-red-500/20 hover:border-red-500 transition-colors cursor-pointer disabled:opacity-50 shrink-0"
+                                      title="Delete Photo"
+                                    >
+                                      {deletingId === item.id ? (
+                                        <Loader2 className="w-3 animate-spin" />
+                                      ) : (
+                                        <Trash2 className="w-3 h-3" />
+                                      )}
+                                    </button>
+                                  </div>
+
+                                  {/* Permanent Cover Indicator (visible without hover) */}
+                                  {item.isCover && (
+                                    <div className="absolute top-2 left-2 z-10 group-hover:opacity-0 transition-opacity duration-300">
+                                      <span className="text-[7px] bg-tertiary text-background uppercase font-bold px-2 py-0.5 rounded-full font-body tracking-wider shadow">
+                                        Cover
+                                      </span>
+                                    </div>
+                                  )}
+
+                                  <img
+                                    src={item.image}
+                                    alt={item.title}
+                                    className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-all duration-500 group-hover:scale-105"
+                                  />
+                                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
+
+                                  <div className="relative p-2.5 mt-auto z-10 truncate w-full">
+                                    <h4 className="font-body text-[10px] font-bold text-white uppercase tracking-wider truncate">
+                                      {item.title}
+                                    </h4>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -644,6 +1018,87 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
         </div>
       )}
 
+      {/* TAB CONTENT: MANAGE TEAM */}
+      {activeTab === "team" && (
+        <div className="space-y-12 animate-fade-in">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/5 pb-4">
+            <div className="flex items-center gap-3">
+              <ImageIcon className="w-5 h-5 text-tertiary" />
+              <h2 className="font-display text-2xl text-primary uppercase font-bold tracking-wide">
+                Manage Team Members ({teamMembers.length})
+              </h2>
+            </div>
+            <p className="font-body text-xs text-on-surface-variant/70 uppercase tracking-wider font-light">
+              Hover over a member to upload a custom profile picture
+            </p>
+          </div>
+
+          {loadingTeam ? (
+            <div className="text-center py-24">
+              <Loader2 className="w-10 h-10 text-tertiary animate-spin mx-auto mb-4" />
+              <p className="font-body text-xs text-on-surface-variant uppercase tracking-widest font-light">
+                Fetching team records...
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+              {teamMembers.map((member) => {
+                const isUpdatingThis = updatingTeamId === member.id;
+                return (
+                  <div
+                    key={member.id}
+                    className="group relative bg-surface-container/20 border border-white/5 rounded-2xl overflow-hidden shadow-2xl flex flex-col justify-end h-[420px]"
+                  >
+                    {/* Background member photo */}
+                    <img
+                      src={member.image}
+                      alt={member.name}
+                      className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-85 transition-all duration-500 group-hover:scale-102"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/35 to-transparent" />
+
+                    {/* Change Image Button Overlay */}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 backdrop-blur-[2px]">
+                      {isUpdatingThis ? (
+                        <div className="text-center space-y-2">
+                          <Loader2 className="w-8 h-8 text-tertiary animate-spin mx-auto" />
+                          <span className="text-[10px] text-tertiary uppercase tracking-widest block font-body font-semibold px-4">
+                            {updatingTeamStatus}
+                          </span>
+                        </div>
+                      ) : (
+                        <label className="bg-tertiary hover:scale-105 active:scale-95 text-[#0b0b0b] font-body text-[10px] font-bold py-3 px-6 rounded-full tracking-widest uppercase transition-all duration-300 cursor-pointer shadow-lg">
+                          Change Photo
+                          <input
+                            type="file"
+                            className="hidden"
+                            accept="image/*"
+                            onChange={(e) => handleTeamPhotoChange(e, member.id)}
+                          />
+                        </label>
+                      )}
+                    </div>
+
+                    {/* Team member text block */}
+                    <div className="relative p-6 z-10 w-full">
+                      <span className="text-[9px] bg-tertiary/15 text-tertiary border border-tertiary/20 uppercase font-semibold px-3 py-1 rounded-full font-body tracking-[0.15em]">
+                        {member.role}
+                      </span>
+                      <h4 className="font-display text-xl font-bold text-white uppercase tracking-wide mt-3">
+                        {member.name}
+                      </h4>
+                      <p className="font-body text-[11px] text-on-surface-variant/80 mt-2 font-light leading-relaxed line-clamp-3">
+                        {member.bio}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* UPLOAD FORM MODAL */}
       <AnimatePresence>
         {isModalOpen && (
@@ -695,23 +1150,25 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
                 </div>
               )}
 
-              <form onSubmit={handleFileUpload} className="space-y-6">
+              <form onSubmit={handleSubmitForm} className="space-y-6">
                 
                 {/* Title */}
-                <div className="space-y-2">
-                  <label className="font-body text-[10px] uppercase text-tertiary tracking-widest font-semibold block">
-                    Asset Title
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={itemTitle}
-                    onChange={(e) => setItemTitle(e.target.value)}
-                    disabled={isUploading}
-                    placeholder="ENTER TITLE (E.G. TWILIGHT IN COMO)"
-                    className="w-full bg-transparent border-b border-outline-variant focus:border-tertiary py-3 text-sm text-on-surface placeholder:text-on-surface-variant/30 transition-colors outline-none font-light disabled:opacity-50"
-                  />
-                </div>
+                {modalType === "film" && (
+                  <div className="space-y-2">
+                    <label className="font-body text-[10px] uppercase text-tertiary tracking-widest font-semibold block">
+                      Asset Title
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={itemTitle}
+                      onChange={(e) => setItemTitle(e.target.value)}
+                      disabled={isUploading}
+                      placeholder="ENTER TITLE (E.G. TWILIGHT IN COMO)"
+                      className="w-full bg-transparent border-b border-outline-variant focus:border-tertiary py-3 text-sm text-on-surface placeholder:text-on-surface-variant/30 transition-colors outline-none font-light disabled:opacity-50"
+                    />
+                  </div>
+                )}
 
                 {/* Portfolio Specific Fields */}
                 {modalType === "portfolio" && (
@@ -790,20 +1247,33 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
                 {/* File Upload Area */}
                 <div className="space-y-2">
                   <label className="font-body text-[10px] uppercase text-tertiary tracking-widest font-semibold block mb-2">
-                    {modalType === "portfolio" ? "Photo File" : "Cover Image File"}
+                    {modalType === "portfolio" ? "Photo File(s)" : "Cover Image File"}
                   </label>
                   <label className="flex flex-col items-center justify-center border border-dashed border-white/10 hover:border-tertiary/50 rounded-xl p-8 cursor-pointer transition-all duration-300 bg-surface-container/20 group">
                     <Upload className="w-8 h-8 text-on-surface-variant/40 group-hover:text-tertiary mb-3 transition-colors" />
                     <span className="text-xs uppercase tracking-wider text-on-surface-variant group-hover:text-primary transition-colors text-center max-w-[250px] truncate">
-                      {selectedFile ? selectedFile.name : "Select or drag file"}
+                      {selectedFiles.length > 0
+                        ? selectedFiles.length === 1
+                          ? selectedFiles[0].name
+                          : `${selectedFiles.length} files selected`
+                        : "Select or drag file(s)"}
                     </span>
                     <input 
                       type="file" 
                       required
                       disabled={isUploading}
-                      onChange={(e) => {
-                        if (e.target.files && e.target.files[0]) {
-                          setSelectedFile(e.target.files[0]);
+                      multiple={modalType === "portfolio"}
+                      onChange={async (e) => {
+                        if (e.target.files && e.target.files.length > 0) {
+                          const files = e.target.files;
+                          const croppedFiles: File[] = [];
+                          for (let i = 0; i < files.length; i++) {
+                            const cropped = await startImageCrop(files[i]);
+                            if (cropped) {
+                              croppedFiles.push(cropped);
+                            }
+                          }
+                          setSelectedFiles(croppedFiles);
                         }
                       }} 
                       className="hidden" 
@@ -824,7 +1294,7 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
                   </button>
                   <button
                     type="submit"
-                    disabled={isUploading || !selectedFile}
+                    disabled={isUploading || selectedFiles.length === 0}
                     className="flex-1 bg-tertiary hover:bg-tertiary/90 text-background font-body text-xs font-bold uppercase tracking-widest rounded py-3.5 transition-all duration-300 cursor-pointer shadow-lg shadow-tertiary/20 disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     {isUploading ? (
@@ -844,6 +1314,223 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
                   </p>
                 )}
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* IMAGE CROPPER MODAL */}
+      <AnimatePresence>
+        {cropImageSrc && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                if (cropCallback) cropCallback(null);
+                setCropImageSrc(null);
+              }}
+              className="absolute inset-0 bg-black/90 backdrop-blur-md cursor-pointer"
+            />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="glass-panel w-full max-w-md p-6 rounded-2xl relative z-10 border border-white/10 shadow-2xl space-y-6 flex flex-col items-center"
+            >
+              <h3 className="font-display text-xl text-primary font-bold uppercase tracking-wider text-center w-full">
+                Adjust Image Crop
+              </h3>
+
+              {/* Crop box container */}
+              <div
+                className="relative w-80 h-80 bg-black rounded-xl overflow-hidden cursor-move border border-white/10"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setIsDragStart(true);
+                  setDragStartPos({ x: e.clientX - cropOffset.x, y: e.clientY - cropOffset.y });
+                }}
+                onMouseMove={(e) => {
+                  if (!isDragStart) return;
+                  setCropOffset({
+                    x: e.clientX - dragStartPos.x,
+                    y: e.clientY - dragStartPos.y
+                  });
+                }}
+                onMouseUp={() => setIsDragStart(false)}
+                onMouseLeave={() => setIsDragStart(false)}
+                onTouchStart={(e) => {
+                  if (e.touches.length === 1) {
+                    setIsDragStart(true);
+                    setDragStartPos({
+                      x: e.touches[0].clientX - cropOffset.x,
+                      y: e.touches[0].clientY - cropOffset.y
+                    });
+                  }
+                }}
+                onTouchMove={(e) => {
+                  if (!isDragStart || e.touches.length !== 1) return;
+                  setCropOffset({
+                    x: e.touches[0].clientX - dragStartPos.x,
+                    y: e.touches[0].clientY - dragStartPos.y
+                  });
+                }}
+                onTouchEnd={() => setIsDragStart(false)}
+              >
+                {/* Square crop frame indicator */}
+                <div className="absolute inset-0 border-2 border-tertiary/75 pointer-events-none z-10 rounded-xl" />
+
+                {/* The image itself */}
+                <img
+                  src={cropImageSrc}
+                  alt="Cropping Preview"
+                  draggable={false}
+                  className="max-w-none origin-center absolute select-none pointer-events-none"
+                  style={{
+                    transform: `translate(${cropOffset.x}px, ${cropOffset.y}px) scale(${cropZoom})`,
+                    left: "50%",
+                    top: "50%",
+                    marginLeft: "-160px",
+                    marginTop: "-160px",
+                    width: "320px",
+                    height: "320px",
+                    objectFit: "contain"
+                  }}
+                />
+              </div>
+
+              {/* Zoom Slider */}
+              <div className="w-full space-y-2">
+                <div className="flex justify-between text-xs font-body text-on-surface-variant font-light uppercase tracking-widest">
+                  <span>Zoom</span>
+                  <span>{Math.round(cropZoom * 100)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="1"
+                  max="3"
+                  step="0.01"
+                  value={cropZoom}
+                  onChange={(e) => setCropZoom(parseFloat(e.target.value))}
+                  className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-tertiary"
+                />
+              </div>
+
+              <div className="flex gap-4 w-full pt-2">
+                <button
+                  onClick={() => {
+                    if (cropCallback) cropCallback(null);
+                    setCropImageSrc(null);
+                  }}
+                  className="flex-1 font-body text-xs uppercase tracking-widest text-on-surface-variant border border-white/10 hover:border-white/30 rounded-lg py-3 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCropImage}
+                  className="flex-1 bg-tertiary hover:bg-tertiary/95 text-background font-body text-xs font-bold uppercase tracking-widest rounded-lg py-3 transition-colors cursor-pointer shadow-lg shadow-tertiary/20"
+                >
+                  Crop Image
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* UPLOAD CONFIRMATION DIALOG */}
+      <AnimatePresence>
+        {confirmModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setConfirmModalOpen(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm cursor-pointer"
+            />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="glass-panel w-full max-w-sm p-6 rounded-xl relative z-10 border border-white/10 shadow-2xl text-center space-y-6"
+            >
+              <div className="w-12 h-12 rounded-full bg-tertiary/10 border border-tertiary/20 flex items-center justify-center mx-auto text-tertiary">
+                <Upload className="w-5 h-5" />
+              </div>
+              
+              <div className="space-y-2">
+                <h4 className="font-display text-lg font-bold text-white uppercase tracking-wider">
+                  Confirm Action
+                </h4>
+                <p className="font-body text-xs text-on-surface-variant leading-relaxed font-light">
+                  {confirmMessage}
+                </p>
+              </div>
+
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setConfirmModalOpen(false)}
+                  className="flex-1 font-body text-xs uppercase tracking-widest text-on-surface-variant border border-white/10 hover:border-white/30 rounded py-3 transition-all duration-300 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    if (onConfirmAction) onConfirmAction();
+                  }}
+                  className="flex-1 bg-tertiary hover:bg-tertiary/95 text-background font-body text-xs font-bold uppercase tracking-widest rounded py-3 transition-all duration-300 cursor-pointer shadow-lg shadow-tertiary/20"
+                >
+                  Confirm
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* SUCCESS NOTIFICATION DIALOG */}
+      <AnimatePresence>
+        {successModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSuccessModalOpen(false)}
+              className="absolute inset-0 bg-black/85 backdrop-blur-sm cursor-pointer"
+            />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="glass-panel w-full max-w-sm p-6 rounded-xl relative z-10 border border-white/10 shadow-2xl text-center space-y-6"
+            >
+              <div className="w-12 h-12 rounded-full bg-emerald-950/50 border border-emerald-500/30 flex items-center justify-center mx-auto text-emerald-400">
+                <svg className="w-5 h-5 stroke-[2]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              
+              <div className="space-y-2">
+                <h4 className="font-display text-lg font-bold text-white uppercase tracking-wider">
+                  Success
+                </h4>
+                <p className="font-body text-xs text-on-surface-variant leading-relaxed font-light">
+                  {successMessage}
+                </p>
+              </div>
+
+              <button
+                onClick={() => setSuccessModalOpen(false)}
+                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-body text-xs font-bold uppercase tracking-widest rounded py-3 transition-colors cursor-pointer shadow-lg shadow-emerald-500/20"
+              >
+                Great
+              </button>
             </motion.div>
           </div>
         )}

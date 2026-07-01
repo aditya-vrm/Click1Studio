@@ -119,18 +119,18 @@ export default function Footer() {
         <div className="lg:col-span-2 space-y-6">
           <h5 className="font-body text-[10px] text-tertiary uppercase tracking-[0.4em] font-semibold">Information</h5>
           <ul className="space-y-4 font-body text-on-surface-variant text-sm">
-            <li><a href="#" className="hover:text-primary transition-colors flex items-center gap-2 group">
+            <li><Link href="/about" className="hover:text-primary transition-colors flex items-center gap-2 group">
               About Us <span className="w-0 group-hover:w-3 h-[1px] bg-tertiary transition-all"></span>
-              </a>
+              </Link>
               </li>
             
             <li><Link href="/#faq" className="hover:text-primary transition-colors flex items-center gap-2 group">
             FAQ <span className="w-0 group-hover:w-3 h-[1px] bg-tertiary transition-all"></span>
             </Link>
             </li>
-            <li><a href="#" className="hover:text-primary transition-colors flex items-center gap-2 group">
+            <li><Link href="/about#contact" className="hover:text-primary transition-colors flex items-center gap-2 group">
               Contact <span className="w-0 group-hover:w-3 h-[1px] bg-tertiary transition-all"></span>
-              </a>
+              </Link>
               </li>
           </ul>
         </div>
