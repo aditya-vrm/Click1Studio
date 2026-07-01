@@ -66,6 +66,8 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
   const [itemDuration, setItemDuration] = useState("");
   const [itemVideoUrl, setItemVideoUrl] = useState("");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [videoSourceType, setVideoSourceType] = useState<"link" | "upload">("link");
+  const [selectedVideoFile, setSelectedVideoFile] = useState<File | null>(null);
   
   // Upload Progress & State
   const [isUploading, setIsUploading] = useState(false);
@@ -306,7 +308,11 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
   const handleSubmitForm = (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedFiles.length === 0) {
-      setUploadError("Please select at least one file to upload.");
+      setUploadError("Please select a cover image file to upload.");
+      return;
+    }
+    if (modalType === "film" && videoSourceType === "upload" && !selectedVideoFile) {
+      setUploadError("Please select a video file to upload.");
       return;
     }
 
@@ -332,9 +338,15 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
     setIsUploading(true);
     setUploadError("");
 
+    // Determine files in the upload queue for progress mapping
+    const filesToUpload = [...selectedFiles];
+    if (modalType === "film" && videoSourceType === "upload" && selectedVideoFile) {
+      filesToUpload.push(selectedVideoFile);
+    }
+
     // Initialize progress indicators
     const initialProgresses: { [key: string]: number } = {};
-    selectedFiles.forEach((file) => {
+    filesToUpload.forEach((file) => {
       initialProgresses[file.name] = 0;
     });
     setUploadProgresses(initialProgresses);
@@ -435,7 +447,7 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
         showToast(`Successfully uploaded ${selectedFiles.length} photographs!`, "success");
       } else {
         // Single Film Cover upload
-        const file = selectedFiles[0];
+        const coverFile = selectedFiles[0];
         setUploadStatus("Uploading cover image to ImageKit...");
 
         const authRes = await fetch("/api/imagekit/auth");
@@ -445,17 +457,36 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
         const authData = await authRes.json();
         const { token, expire, signature, publicKey } = authData;
 
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("fileName", file.name);
-        formData.append("publicKey", publicKey);
-        formData.append("signature", signature);
-        formData.append("expire", expire.toString());
-        formData.append("token", token);
-        formData.append("folder", "/films");
+        const coverFormData = new FormData();
+        coverFormData.append("file", coverFile);
+        coverFormData.append("fileName", coverFile.name);
+        coverFormData.append("publicKey", publicKey);
+        coverFormData.append("signature", signature);
+        coverFormData.append("expire", expire.toString());
+        coverFormData.append("token", token);
+        coverFormData.append("folder", "/films");
 
-        const uploadData = await uploadFileWithProgress(file, formData);
-        const fileUrl = uploadData.url;
+        const coverUploadData = await uploadFileWithProgress(coverFile, coverFormData);
+        const coverUrl = coverUploadData.url;
+
+        // Determine video URL
+        let finalVideoUrl = itemVideoUrl;
+
+        if (videoSourceType === "upload" && selectedVideoFile) {
+          setUploadStatus("Uploading video file to ImageKit (this may take a few moments)...");
+
+          const videoFormData = new FormData();
+          videoFormData.append("file", selectedVideoFile);
+          videoFormData.append("fileName", selectedVideoFile.name);
+          videoFormData.append("publicKey", publicKey);
+          videoFormData.append("signature", signature);
+          videoFormData.append("expire", expire.toString());
+          videoFormData.append("token", token);
+          videoFormData.append("folder", "/films/videos");
+
+          const videoUploadData = await uploadFileWithProgress(selectedVideoFile, videoFormData);
+          finalVideoUrl = videoUploadData.url;
+        }
 
         setUploadStatus("Saving film details to Database...");
 
@@ -466,8 +497,8 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
             title: itemTitle,
             location: itemLocation,
             duration: itemDuration,
-            coverImage: fileUrl,
-            videoUrl: itemVideoUrl,
+            coverImage: coverUrl,
+            videoUrl: finalVideoUrl,
           }),
         });
 
@@ -488,6 +519,8 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
       setItemDuration("");
       setItemVideoUrl("");
       setSelectedFiles([]);
+      setVideoSourceType("link");
+      setSelectedVideoFile(null);
       setUploadStatus("");
     } catch (err: any) {
       setUploadError(err.message || "An unexpected error occurred during upload.");
@@ -1275,17 +1308,82 @@ export default function BookingsDashboard({ initialBookings }: BookingsDashboard
 
                     <div className="space-y-2">
                       <label className="font-body text-[10px] uppercase text-tertiary tracking-widest font-semibold block">
-                        Video URL Link (Vimeo / YouTube / ImageKit URL)
+                        Video Source
                       </label>
-                      <input
-                        type="url"
-                        value={itemVideoUrl}
-                        onChange={(e) => setItemVideoUrl(e.target.value)}
-                        disabled={isUploading}
-                        placeholder="ENTER LINK URL (OPTIONAL)"
-                        className="w-full bg-transparent border-b border-outline-variant focus:border-tertiary py-3 text-sm text-on-surface placeholder:text-on-surface-variant/30 transition-colors outline-none font-light disabled:opacity-50"
-                      />
+                      <div className="flex gap-4">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setVideoSourceType("link");
+                            setSelectedVideoFile(null);
+                          }}
+                          disabled={isUploading}
+                          className={`flex-1 py-2.5 text-[10px] uppercase tracking-wider font-semibold rounded-lg border transition-all duration-300 cursor-pointer ${
+                            videoSourceType === "link"
+                              ? "bg-tertiary text-background border-tertiary"
+                              : "bg-transparent text-on-surface-variant border-white/10 hover:border-white/20"
+                          }`}
+                        >
+                          Video Link URL
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setVideoSourceType("upload");
+                            setItemVideoUrl("");
+                          }}
+                          disabled={isUploading}
+                          className={`flex-1 py-2.5 text-[10px] uppercase tracking-wider font-semibold rounded-lg border transition-all duration-300 cursor-pointer ${
+                            videoSourceType === "upload"
+                              ? "bg-tertiary text-background border-tertiary"
+                              : "bg-transparent text-on-surface-variant border-white/10 hover:border-white/20"
+                          }`}
+                        >
+                          Upload Video File
+                        </button>
+                      </div>
                     </div>
+
+                    {videoSourceType === "link" ? (
+                      <div className="space-y-2">
+                        <label className="font-body text-[10px] uppercase text-tertiary tracking-widest font-semibold block">
+                          Video URL Link (Vimeo / YouTube / ImageKit URL)
+                        </label>
+                        <input
+                          type="url"
+                          required={videoSourceType === "link"}
+                          value={itemVideoUrl}
+                          onChange={(e) => setItemVideoUrl(e.target.value)}
+                          disabled={isUploading}
+                          placeholder="ENTER LINK URL"
+                          className="w-full bg-transparent border-b border-outline-variant focus:border-tertiary py-3 text-sm text-on-surface placeholder:text-on-surface-variant/30 transition-colors outline-none font-light disabled:opacity-50"
+                        />
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <label className="font-body text-[10px] uppercase text-tertiary tracking-widest font-semibold block">
+                          Upload Video File (.mp4, .mov, etc.)
+                        </label>
+                        <label className="flex flex-col items-center justify-center border border-dashed border-white/10 hover:border-tertiary/50 rounded-xl p-6 cursor-pointer transition-all duration-300 bg-surface-container/20 group">
+                          <Upload className="w-6 h-6 text-on-surface-variant/40 group-hover:text-tertiary mb-2 transition-colors" />
+                          <span className="text-[10px] uppercase tracking-wider text-on-surface-variant group-hover:text-primary transition-colors text-center max-w-[250px] truncate">
+                            {selectedVideoFile ? selectedVideoFile.name : "Select Video File"}
+                          </span>
+                          <input
+                            type="file"
+                            required={videoSourceType === "upload"}
+                            disabled={isUploading}
+                            onChange={(e) => {
+                              if (e.target.files && e.target.files.length > 0) {
+                                setSelectedVideoFile(e.target.files[0]);
+                              }
+                            }}
+                            className="hidden"
+                            accept="video/*"
+                          />
+                        </label>
+                      </div>
+                    )}
                   </>
                 )}
 
