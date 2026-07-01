@@ -217,50 +217,7 @@ export default function FilmsPage() {
           </div>
         </section>
 
-        {/* Bento Grid Editorial Section */}
-        <section className="mb-32 bg-surface py-24 border-y border-white/5">
-          <div className="px-6 md:px-20 max-w-[1440px] mx-auto mb-16 flex flex-col lg:flex-row justify-between items-start lg:items-end gap-8">
-            <div className="max-w-2xl">
-              <span className="text-tertiary font-body tracking-[0.3em] uppercase text-xs font-bold">Editorial Excellence</span>
-              <h3 className="font-display text-3xl md:text-5xl text-white mt-4 font-semibold uppercase tracking-tight">Editorial &amp; Brand</h3>
-              <p className="text-on-surface-variant mt-4 font-body leading-relaxed text-base font-light">
-                Crafting high-impact visual narratives for global visionaries. We focus on the interplay of texture, light, and the raw essence of artisanal craftsmanship.
-              </p>
-            </div>
-          </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 px-6 md:px-20 max-w-[1440px] mx-auto">
-            {/* Large Bento Card */}
-            <div className="lg:col-span-8 group cursor-pointer relative overflow-hidden rounded-2xl aspect-video lg:h-[600px] shadow-3xl">
-              <div 
-                className="w-full h-full bg-cover bg-center transition-transform duration-1000 group-hover:scale-105" 
-                style={{ backgroundImage: "url('https://images.unsplash.com/photo-1511285560929-80b456fea0bc?q=80&w=1200&auto=format&fit=crop')" }} 
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#0b0b0b] via-[#0b0b0b]/40 to-transparent" />
-              <div className="absolute bottom-10 left-10 right-10">
-                <span className="text-tertiary font-body tracking-[0.4em] uppercase text-[10px] font-bold">Brand Narrative</span>
-                <h4 className="font-display text-3xl md:text-5xl text-white mt-3 font-bold tracking-tight uppercase">Vanguards of Time</h4>
-                <button className="mt-8 flex items-center gap-3 text-white font-body tracking-[0.3em] text-[10px] font-bold border border-white/20 px-8 py-4 rounded-full hover:bg-white hover:text-black hover:border-white transition-all backdrop-blur-sm group/btn cursor-pointer">
-                  <Play className="w-3.5 h-3.5 fill-current" /> WATCH TRAILER
-                </button>
-              </div>
-            </div>
-
-            {/* Vertical Bento Card */}
-            <div className="lg:col-span-4 group cursor-pointer relative overflow-hidden rounded-2xl h-[400px] lg:h-[600px] shadow-3xl">
-              <div 
-                className="w-full h-full bg-cover bg-center transition-transform duration-1000 group-hover:scale-105" 
-                style={{ backgroundImage: "url('https://images.unsplash.com/photo-1460978812857-470ed1c78af3?q=80&w=800&auto=format&fit=crop')" }} 
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#0b0b0b] via-[#0b0b0b]/40 to-transparent" />
-              <div className="absolute bottom-10 left-10">
-                <span className="text-tertiary font-body tracking-[0.4em] uppercase text-[10px] font-bold">Architecture</span>
-                <h4 className="font-display text-2xl md:text-3xl text-white mt-3 font-semibold uppercase">Shadow &amp; Form</h4>
-                <p className="text-on-surface-variant text-[10px] mt-2 tracking-widest uppercase font-body font-semibold">02:15 | London</p>
-              </div>
-            </div>
-          </div>
-        </section>
 
         {/* Drone perspectives */}
         <section className="max-w-[1440px] mx-auto">
